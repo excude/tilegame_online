@@ -1,0 +1,667 @@
+<!-- LEXIO (렉시오) - Online Solo v1.0 (4인 고정: 나 + AI 3) -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+<title>렉시오 · LEXIO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wood-1:#221430;
+    --wood-2:#4a2d66;
+    --ivory:#f5ecd7;
+    --ivory-2:#efe2c2;
+    --gold:#c99a4a;
+    --gold-bright:#e8c27a;
+    --ink:#1c1226;
+    --panel:#2a1c3ecc;
+    --line:#8a6ab0;
+    --sun:#d9682f;
+    --moon:#3b6ea5;
+    --star:#8a5cc4;
+    --cloud:#3e8574;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100% !important;text-size-adjust:100% !important;}
+  html,body{height:100%;margin:0;font-size:16px;}
+  body{
+    font-family:'Noto Sans KR',sans-serif;
+    background:radial-gradient(ellipse at 50% 15%, var(--wood-2), var(--wood-1) 75%);
+    color:var(--ivory);
+    overflow:hidden;
+    height:100dvh;width:100vw;position:fixed;inset:0;
+  }
+  .title-font{font-family:'Black Han Sans',sans-serif;letter-spacing:2px;}
+
+  #app{position:relative;width:100%;max-width:520px;height:100%;margin:0 auto;display:flex;flex-direction:column;box-shadow:0 0 40px #00000080;}
+
+  /* topbar */
+  #topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:linear-gradient(180deg,#170e20,transparent);z-index:20;gap:8px;}
+  #topbar .brand{font-size:20px;color:var(--gold-bright);}
+  #topbar .brand .ver-tag{display:inline-block;color:#3a2a0a;background:var(--gold-bright);font-size:10px;font-family:'Noto Sans KR';font-weight:700;vertical-align:middle;margin-left:6px;padding:2px 6px;border-radius:8px;letter-spacing:0;}
+  #topbar .brand span{color:var(--ivory);font-size:11px;display:block;font-family:'Noto Sans KR';opacity:.65;margin-top:-2px;}
+  #roundTag{font-size:11px;padding:5px 10px;border:1px solid var(--gold);border-radius:20px;color:var(--gold-bright);background:#00000030;white-space:nowrap;}
+  #newGameBtn{background:none;border:1px solid var(--line);color:var(--ivory);border-radius:20px;padding:5px 10px;font-size:11px;cursor:pointer;}
+  #newGameBtn:active{background:#00000040;}
+
+  #statusStrip{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px;z-index:20;}
+  .status-badge{font-size:11px;padding:5px 10px;border-radius:20px;background:#00000045;border:1px solid #c99a4a55;color:var(--ivory);white-space:nowrap;}
+  .status-badge.me{color:var(--gold-bright);border-color:var(--gold);font-weight:700;}
+  .status-badge.leader{color:#8ee0c8;border-color:#3e857488;}
+  .status-badge.turn{color:#f0cd8a;border-color:var(--gold-bright);font-weight:800;}
+
+  /* table */
+  #table{position:relative;flex:1;min-height:0;margin:0 10px;border-radius:22px;
+    background:radial-gradient(ellipse at 50% 35%, #6d4a92 0%, #402a5c 55%, #201333 100%);
+    border:6px solid #170e20;box-shadow:inset 0 0 60px #00000080, 0 10px 30px #00000060;overflow:hidden;}
+  #table::before{content:"";position:absolute;inset:14px;border:1px solid #e8c27a33;border-radius:16px;pointer-events:none;}
+
+  .seat{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;width:98px;transform:translate(-50%,-50%);}
+  .seat .avatar{width:44px;height:44px;border-radius:12px;background:radial-gradient(circle at 35% 30%, #6d4a92,#201333);
+    border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--gold-bright);font-family:'Black Han Sans';position:relative;}
+  .seat.turn .avatar{border-color:var(--gold-bright);box-shadow:0 0 0 4px #e8c27a33, 0 0 14px #e8c27a88;}
+  .seat .name{font-size:11px;color:var(--ivory);opacity:.9;white-space:nowrap;}
+  .seat .cardcount{font-size:9px;opacity:.6;}
+  .leader-badge{position:absolute;top:-6px;right:-6px;background:var(--gold-bright);color:#3a2a0a;font-size:9px;font-weight:900;border-radius:8px;padding:1px 5px;white-space:nowrap;}
+
+  #centerArea{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;width:260px;}
+  #lastComboLabel{font-size:11px;color:var(--gold-bright);opacity:.9;min-height:14px;text-align:center;}
+  #lastComboTiles{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;min-height:52px;}
+  #turnFlash{font-size:12px;color:var(--gold-bright);background:#00000060;padding:4px 10px;border-radius:10px;}
+
+  .tile{width:38px;height:52px;border-radius:6px;background:linear-gradient(160deg,#fffdf6,#e9dfc4);
+    box-shadow:0 2px 4px #00000060, inset 0 0 0 1px #00000015;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;flex-shrink:0;}
+  .tile .num{font-family:'Black Han Sans';font-size:17px;line-height:1;}
+  .tile .suit{font-size:10px;position:absolute;bottom:3px;right:4px;}
+  .tile.sun .num{color:var(--sun);}
+  .tile.moon .num{color:var(--moon);}
+  .tile.star .num{color:var(--star);}
+  .tile.cloud .num{color:var(--cloud);}
+  .tile.fly-in{animation:tileFlyIn .42s cubic-bezier(.2,.7,.3,1) both;}
+  @keyframes tileFlyIn{
+    from{ transform:translate(var(--fx,0),var(--fy,0)) scale(.5) rotate(var(--fr,0deg)); opacity:0; }
+    to{ transform:translate(0,0) scale(1) rotate(0deg); opacity:1; }
+  }
+  .seat.playing .avatar{animation:seatPulse .42s ease;}
+  @keyframes seatPulse{
+    0%{ box-shadow:0 0 0 0 #e8c27a00; }
+    40%{ box-shadow:0 0 0 6px #e8c27a66; }
+    100%{ box-shadow:0 0 0 0 #e8c27a00; }
+  }
+
+  /* log */
+  #log{position:absolute;bottom:8px;left:8px;right:8px;max-height:60px;overflow:hidden;font-size:10.5px;color:#f5ecd7cc;
+    line-height:1.5;text-shadow:0 1px 2px #000;cursor:pointer;padding:4px 6px;border-radius:8px;word-break:break-word;}
+  #log:active{background:#00000030;}
+  .logFull{max-height:50vh;overflow-y:auto;font-size:12px;line-height:1.9;color:#f5ecd7;background:#00000030;border-radius:10px;padding:10px 12px;margin-bottom:12px;}
+
+  /* hand */
+  #handWrap{position:relative;padding:14px 6px 12px;background:linear-gradient(180deg, transparent, #170e20 40%);}
+  #handInfo{display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px;font-size:11px;color:var(--gold-bright);gap:8px;}
+  #feedback{text-align:center;font-size:11px;color:#ef9d7d;min-height:14px;margin-bottom:2px;}
+  #myHand{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:14px 8px 8px;max-height:38vh;overflow-y:auto;}
+  #myHand::-webkit-scrollbar{display:none;}
+  .htile{width:40px;height:54px;border-radius:7px;background:linear-gradient(160deg,#fffdf6,#e9dfc4);
+    box-shadow:0 2px 4px #00000060;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;flex-shrink:0;transition:transform .15s ease, box-shadow .15s ease;cursor:pointer;margin-top:10px;}
+  .htile .num{font-family:'Black Han Sans';font-size:19px;line-height:1;}
+  .htile .suit{font-size:11px;position:absolute;bottom:3px;right:4px;}
+  .htile.sun .num{color:var(--sun);}
+  .htile.moon .num{color:var(--moon);}
+  .htile.star .num{color:var(--star);}
+  .htile.cloud .num{color:var(--cloud);}
+  .htile.selected{transform:translateY(-10px);box-shadow:0 0 0 2px var(--gold-bright), 0 6px 10px #00000070;}
+
+  #actionBar{display:flex;gap:8px;padding:0 8px;}
+  #recommendBtn{flex:0.85;}
+  .btn{flex:1;padding:12px;border-radius:12px;border:none;font-size:14px;font-weight:800;cursor:pointer;
+    background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#2a1c0d;}
+  .btn:active{filter:brightness(.92);}
+  .btn:disabled{opacity:.35;filter:grayscale(.4);cursor:default;}
+  .btn.ghost{background:#00000030;color:var(--ivory);border:1px solid var(--line);}
+
+  /* modal */
+  #modalOverlay{position:fixed;inset:0;background:#000000a0;display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  #modalOverlay.show{display:flex;}
+  #modalBox{background:linear-gradient(180deg,#3a2555,#20142f);border:1px solid var(--gold);border-radius:16px;padding:20px;max-width:440px;width:100%;max-height:82vh;overflow-y:auto;}
+  #modalBox h2{color:var(--gold-bright);font-family:'Black Han Sans';margin:0 0 10px;text-align:center;letter-spacing:1px;}
+  #modalBox p.sub{color:var(--ivory);opacity:.85;font-size:13px;line-height:1.6;margin:0 0 14px;}
+  .modal-actions{display:flex;gap:8px;margin-top:14px;}
+  .score-row{display:flex;justify-content:space-between;padding:6px 4px;border-bottom:1px solid #ffffff15;font-size:13px;}
+  .score-row .val{font-weight:800;}
+  .score-row .val.pos{color:#8ee0a8;}
+  .score-row .val.neg{color:#ef9d7d;}
+  .rank-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #ffffff15;}
+  .rank-row .medal{font-family:'Black Han Sans';color:var(--gold-bright);width:26px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.001</span><span>LEXIO · 나 + AI 3</span></div>
+    <div id="roundTag">준비 중</div>
+    <button id="newGameBtn">새 매치</button>
+  </div>
+  <div id="statusStrip"></div>
+  <div id="table">
+    <div id="seats"></div>
+    <div id="centerArea">
+      <div id="lastComboLabel"></div>
+      <div id="lastComboTiles"></div>
+      <div id="turnFlash"></div>
+    </div>
+    <div id="log"></div>
+  </div>
+  <div id="handWrap">
+    <div id="handInfo"><span id="handInfoLeft">내 타일</span><span id="handInfoRight"></span></div>
+    <div id="feedback"></div>
+    <div id="myHand"></div>
+    <div id="actionBar">
+      <button class="btn ghost" id="recommendBtn">💡 추천</button>
+      <button class="btn ghost" id="passBtn">패스</button>
+      <button class="btn" id="playBtn">내기</button>
+    </div>
+  </div>
+</div>
+
+<div id="modalOverlay"><div id="modalBox"></div></div>
+
+<script>
+(function(){
+
+/* ============================ 기본 정의 ============================ */
+const SUITS = [
+  {id:'sun',   symbol:'☀️', label:'해',   order:3},
+  {id:'moon',  symbol:'🌙', label:'달',   order:2},
+  {id:'star',  symbol:'⭐', label:'별',   order:1},
+  {id:'cloud', symbol:'☁️', label:'구름', order:0},
+];
+const N_PLAYERS = 4;
+const NUM_MAX = 13;
+const TOTAL_ROUNDS = 5;
+
+function suitObj(id){ return SUITS.find(s=>s.id===id); }
+function suitOrder(id){ return suitObj(id).order; }
+function tileId(t){ return t.suit+'-'+t.num; }
+function numStrength(n){ return n===2?15:(n===1?14:n); }
+function singleValue(t){ return numStrength(t.num)*10 + suitOrder(t.suit); }
+
+function buildDeck(){
+  const deck=[];
+  for(const s of SUITS) for(let n=1;n<=NUM_MAX;n++) deck.push({suit:s.id, num:n});
+  return deck;
+}
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+}
+function sortHandInPlace(h){ h.sort((a,b)=>singleValue(a)-singleValue(b)); }
+
+function kCombos(arr,k){
+  const res=[]; const combo=[];
+  (function rec(start){
+    if(combo.length===k){ res.push(combo.slice()); return; }
+    for(let i=start;i<arr.length;i++){ combo.push(arr[i]); rec(i+1); combo.pop(); }
+  })(0);
+  return res;
+}
+
+/* ============================ 조합 판정 ============================ */
+function detectStraightNums(nums){
+  const sorted=[...nums].sort((a,b)=>a-b);
+  if(new Set(sorted).size!==5) return null;
+  if(sorted[4]-sorted[0]===4) return {top:sorted[4], topNum:sorted[4]};
+  if(sorted.join(',')==='1,10,11,12,13') return {top:14, topNum:1};
+  return null;
+}
+function detectMade(tiles){
+  const nums=tiles.map(t=>t.num);
+  const tally={};
+  nums.forEach(n=>tally[n]=(tally[n]||0)+1);
+  const counts=Object.values(tally).sort((a,b)=>b-a);
+  const isFlush = tiles.every(t=>t.suit===tiles[0].suit);
+  const straight = counts.length===5 ? detectStraightNums(nums) : null;
+
+  if(counts[0]===4){
+    const quadNum=Number(Object.keys(tally).find(k=>tally[k]===4));
+    return {category:4, label:'포카드', value:numStrength(quadNum)*10, key:quadNum};
+  }
+  if(counts[0]===3 && counts[1]===2){
+    const tripleNum=Number(Object.keys(tally).find(k=>tally[k]===3));
+    return {category:3, label:'풀하우스', value:numStrength(tripleNum)*10, key:tripleNum};
+  }
+  if(counts.length===5){
+    if(straight && isFlush){
+      const topTile = tiles.find(t=>t.num===straight.topNum);
+      return {category:5, label:'스트레이트플러시', value:straight.top*10+suitOrder(topTile.suit), key:straight.top};
+    }
+    if(straight){
+      const topTile = tiles.find(t=>t.num===straight.topNum);
+      return {category:1, label:'스트레이트', value:straight.top*10+suitOrder(topTile.suit), key:straight.top};
+    }
+    if(isFlush){
+      const flushRank = tiles.map(t=>numStrength(t.num)).sort((a,b)=>b-a);
+      return {category:2, label:'플러시', value:0, flushRank, key:tiles[0].suit};
+    }
+  }
+  return null;
+}
+function compareMade(a,b){
+  if(a.category!==b.category) return a.category>b.category;
+  if(a.category===2){
+    for(let i=0;i<5;i++){ if(a.flushRank[i]!==b.flushRank[i]) return a.flushRank[i]>b.flushRank[i]; }
+    return false;
+  }
+  return a.value>b.value;
+}
+function describeCombo(c){
+  if(c.kind==='single') return `싱글 (${c.tiles[0].num}${suitObj(c.tiles[0].suit).label})`;
+  if(c.kind==='pair') return `페어 (${c.tiles[0].num})`;
+  if(c.kind==='triple') return `트리플 (${c.tiles[0].num})`;
+  return c.made.label;
+}
+function evaluatePlay(tiles, requiredCount){
+  const count=tiles.length;
+  if(count===0) return {ok:false, reason:'타일을 선택해주세요.'};
+  if(requiredCount!=null && count!==requiredCount) return {ok:false, reason:`${requiredCount}장을 내야 합니다.`};
+  if(![1,2,3,5].includes(count)) return {ok:false, reason:'1, 2, 3, 5장만 낼 수 있습니다 (4장 불가).'};
+  if(count===1) return {ok:true, combo:{count:1, kind:'single', strength:singleValue(tiles[0]), tiles}};
+  if(count===2){
+    if(tiles[0].num!==tiles[1].num) return {ok:false, reason:'페어는 같은 숫자여야 합니다.'};
+    const strength=numStrength(tiles[0].num)*10+Math.max(suitOrder(tiles[0].suit),suitOrder(tiles[1].suit));
+    return {ok:true, combo:{count:2, kind:'pair', strength, tiles}};
+  }
+  if(count===3){
+    if(!(tiles[0].num===tiles[1].num && tiles[1].num===tiles[2].num)) return {ok:false, reason:'트리플은 같은 숫자 3개여야 합니다.'};
+    const strength=numStrength(tiles[0].num)*10+Math.max(...tiles.map(t=>suitOrder(t.suit)));
+    return {ok:true, combo:{count:3, kind:'triple', strength, tiles}};
+  }
+  const made=detectMade(tiles);
+  if(!made) return {ok:false, reason:'유효한 5장 조합(스트레이트/플러시/풀하우스/포카드/스트플)이 아닙니다.'};
+  return {ok:true, combo:{count:5, kind:'made', made, tiles}};
+}
+function beatsCombo(newCombo, prevCombo){
+  if(!prevCombo) return true;
+  if(newCombo.kind==='made') return compareMade(newCombo.made, prevCombo.made);
+  return newCombo.strength > prevCombo.strength;
+}
+
+/* ============================ AI ============================ */
+function aiFindPlay(hand, requiredCount, prevCombo){
+  if(requiredCount==null){
+    if(hand.length===5){
+      const ev=evaluatePlay(hand,null);
+      if(ev.ok) return hand;
+    }
+    if(hand.length>5 && Math.random()<0.25){
+      const combos5=kCombos(hand,5);
+      for(const c of combos5){ const ev=evaluatePlay(c,null); if(ev.ok && ev.combo.made.category===1) return c; }
+    }
+    const tally={};
+    hand.forEach(t=>{ (tally[t.num]=tally[t.num]||[]).push(t); });
+    const byNum = Object.keys(tally).sort((a,b)=>numStrength(Number(a))-numStrength(Number(b)));
+    const withTriple = byNum.filter(n=>tally[n].length>=3);
+    const withPair = byNum.filter(n=>tally[n].length>=2);
+    if(withTriple.length && Math.random()<0.35) return tally[withTriple[0]].slice(0,3);
+    if(withPair.length && Math.random()<0.45) return tally[withPair[0]].slice(0,2);
+    const sorted=[...hand].sort((a,b)=>singleValue(a)-singleValue(b));
+    return [sorted[0]];
+  }
+  const count=requiredCount;
+  let candidates=[];
+  if(count===1){
+    candidates = hand.map(t=>({tiles:[t], ev:evaluatePlay([t],1)}))
+      .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
+    candidates.sort((a,b)=>a.ev.combo.strength-b.ev.combo.strength);
+  } else if(count===2 || count===3){
+    candidates = kCombos(hand,count).map(c=>({tiles:c, ev:evaluatePlay(c,count)}))
+      .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
+    candidates.sort((a,b)=>a.ev.combo.strength-b.ev.combo.strength);
+  } else if(count===5){
+    candidates = kCombos(hand,5).map(c=>({tiles:c, ev:evaluatePlay(c,5)}))
+      .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
+    candidates.sort((a,b)=> (a.ev.combo.made.category-b.ev.combo.made.category) ||
+      (a.ev.combo.made.category===2 ? 0 : a.ev.combo.made.value-b.ev.combo.made.value));
+  }
+  if(!candidates.length) return null;
+  return candidates[0].tiles;
+}
+
+/* ============================ 상태 ============================ */
+let G = null;
+let matchState = { round:1, totalRounds:TOTAL_ROUNDS, scores:[0,0,0,0], history:[] };
+let selection = new Set();
+let feedbackTimer = null;
+let lastRenderedComboKey = null;
+
+function addLog(msg){ G.log.push(msg); }
+
+/* ============================ 라운드 진행 ============================ */
+function startMatch(){
+  matchState = { round:1, totalRounds:TOTAL_ROUNDS, scores:[0,0,0,0], history:[] };
+  startRound();
+  closeModal();
+}
+function startRound(){
+  const deck=shuffle(buildDeck());
+  const hands=[[],[],[],[]];
+  for(let i=0;i<deck.length;i++) hands[i%N_PLAYERS].push(deck[i]);
+  hands.forEach(sortHandInPlace);
+  let leader = hands.findIndex(h=>h.some(t=>t.suit==='cloud' && t.num===3));
+  if(leader<0) leader=0;
+  G = {
+    players:[0,1,2,3].map(i=>({idx:i, name:i===0?'나':`AI ${i}`, isHuman:i===0, hand:hands[i]})),
+    leader, turn:leader, lastCombo:null, requiredCount:null, passCount:0,
+    log:[], finished:false, winner:null,
+  };
+  selection.clear();
+  addLog(`${matchState.round}라운드 시작. ${G.players[leader].name}님이 구름3을 가지고 있어 선을 잡았습니다.`);
+  render();
+  scheduleTurnIfAI();
+  queueSave();
+}
+function advanceTurn(){ G.turn=(G.turn+1)%N_PLAYERS; }
+
+function doPlay(playerIdx, tiles){
+  const ev=evaluatePlay(tiles, G.requiredCount);
+  if(!ev.ok){ if(playerIdx===0) showFeedback(ev.reason); return false; }
+  if(G.requiredCount!=null && !beatsCombo(ev.combo, G.lastCombo)){
+    if(playerIdx===0) showFeedback('이전 조합보다 높은 조합을 내야 합니다.');
+    return false;
+  }
+  const p=G.players[playerIdx];
+  const ids=tiles.map(tileId);
+  p.hand = p.hand.filter(t=>!ids.includes(tileId(t)));
+  ev.combo.owner=playerIdx;
+  G.lastCombo=ev.combo;
+  G.requiredCount=ev.combo.count;
+  G.passCount=0;
+  addLog(`${p.name}: ${describeCombo(ev.combo)}`);
+  selection.clear();
+  if(p.hand.length===0){ finishRound(playerIdx); return true; }
+  advanceTurn();
+  render();
+  scheduleTurnIfAI();
+  queueSave();
+  return true;
+}
+function doPass(playerIdx){
+  if(G.requiredCount==null){
+    if(playerIdx===0) showFeedback('선(先)은 패스할 수 없습니다. 조합을 내주세요.');
+    return false;
+  }
+  addLog(`${G.players[playerIdx].name}: 패스`);
+  G.passCount++;
+  if(G.passCount>=N_PLAYERS-1){
+    G.leader=G.lastCombo.owner;
+    G.turn=G.leader;
+    G.lastCombo=null; G.requiredCount=null; G.passCount=0;
+    addLog(`${G.players[G.leader].name}님이 다시 선을 잡았습니다. 원하는 조합을 자유롭게 낼 수 있습니다.`);
+  } else {
+    advanceTurn();
+  }
+  render();
+  scheduleTurnIfAI();
+  queueSave();
+  return true;
+}
+function scheduleTurnIfAI(){
+  if(!G || G.finished) return;
+  const p=G.players[G.turn];
+  if(!p.isHuman){
+    setTimeout(()=>{
+      if(!G || G.finished || G.turn!==p.idx) return;
+      const tiles=aiFindPlay(p.hand, G.requiredCount, G.lastCombo);
+      if(tiles) doPlay(p.idx, tiles); else doPass(p.idx);
+    }, 600+Math.random()*550);
+  }
+}
+function finishRound(winnerIdx){
+  G.finished=true; G.winner=winnerIdx;
+  const counts=G.players.map(p=>p.hand.length);
+  const total=counts.reduce((a,b)=>a+b,0);
+  const roundScores=counts.map(c=>total-N_PLAYERS*c);
+  roundScores.forEach((s,i)=>matchState.scores[i]+=s);
+  matchState.history.push({round:matchState.round, counts:counts.slice(), roundScores});
+  addLog(`${G.players[winnerIdx].name}님이 타일을 모두 내고 라운드 승리!`);
+  render();
+  showRoundResultModal(roundScores, counts, winnerIdx);
+  queueSave();
+}
+
+/* ============================ 렌더링 ============================ */
+function tileEl(t, cls){
+  const el=document.createElement('div');
+  el.className=`${cls} ${t.suit}`;
+  el.innerHTML=`<span class="num">${t.num}</span><span class="suit">${suitObj(t.suit).symbol}</span>`;
+  return el;
+}
+const SEAT_POS = { 1:{left:'50%',top:'14%'}, 2:{left:'82%',top:'42%'}, 3:{left:'18%',top:'42%'} };
+// 각 플레이어(0=나, 1=위, 2=오른쪽, 3=왼쪽)에서 중앙으로 타일이 날아오는 방향
+const FLY_FROM = { 0:{fx:'0px',fy:'150px'}, 1:{fx:'0px',fy:'-140px'}, 2:{fx:'140px',fy:'0px'}, 3:{fx:'-140px',fy:'0px'} };
+
+function render(){
+  if(!G) return;
+  document.getElementById('roundTag').textContent = `${matchState.round} / ${matchState.totalRounds} 라운드`;
+  const comboKey = G.lastCombo
+    ? ('c:'+G.lastCombo.owner+':'+G.lastCombo.tiles.map(tileId).slice().sort().join(','))
+    : ('free:'+G.leader+':'+G.passCount+':'+matchState.round);
+  const isNewCombo = comboKey !== lastRenderedComboKey;
+  lastRenderedComboKey = comboKey;
+
+  // status strip
+  const strip=document.getElementById('statusStrip');
+  strip.innerHTML='';
+  const meScore=matchState.scores[0];
+  strip.appendChild(badgeEl(`내 점수 ${meScore>=0?'+':''}${meScore}`, 'me'));
+  strip.appendChild(badgeEl(`선: ${G.players[G.leader].name}`, 'leader'));
+  strip.appendChild(badgeEl(`요구: ${G.requiredCount==null?'자유':G.requiredCount+'장'}`, 'turn'));
+
+  // seats (AI 1,2,3)
+  const seatsWrap=document.getElementById('seats');
+  seatsWrap.innerHTML='';
+  [1,2,3].forEach(i=>{
+    const p=G.players[i];
+    const justPlayed = isNewCombo && G.lastCombo && G.lastCombo.owner===i;
+    const seat=document.createElement('div');
+    seat.className='seat'+(G.turn===i?' turn':'')+(justPlayed?' playing':'');
+    seat.style.left=SEAT_POS[i].left; seat.style.top=SEAT_POS[i].top;
+    seat.innerHTML=`
+      <div class="avatar">AI${i}${G.leader===i?'<div class="leader-badge">선</div>':''}</div>
+      <div class="name">${p.name}</div>
+      <div class="cardcount">${p.hand.length}장</div>`;
+    seatsWrap.appendChild(seat);
+  });
+
+  // center: last combo
+  const labelEl=document.getElementById('lastComboLabel');
+  const tilesEl=document.getElementById('lastComboTiles');
+  tilesEl.innerHTML='';
+  if(G.finished){
+    labelEl.textContent = `라운드 종료 · ${G.players[G.winner].name} 승리`;
+  } else if(!G.lastCombo){
+    labelEl.textContent = `${G.players[G.leader].name}님이 자유롭게 냅니다`;
+  } else {
+    labelEl.textContent = `${G.players[G.lastCombo.owner].name} · ${describeCombo(G.lastCombo)}`;
+    const from = FLY_FROM[G.lastCombo.owner] || FLY_FROM[0];
+    G.lastCombo.tiles.forEach((t,i)=>{
+      const el=tileEl(t,'tile');
+      if(isNewCombo){
+        el.classList.add('fly-in');
+        el.style.setProperty('--fx', from.fx);
+        el.style.setProperty('--fy', from.fy);
+        el.style.setProperty('--fr', ((i%2===0?1:-1)*(6+i*2))+'deg');
+        el.style.animationDelay=(i*0.04)+'s';
+      }
+      tilesEl.appendChild(el);
+    });
+  }
+  document.getElementById('turnFlash').textContent = G.finished ? '' : (G.players[G.turn].isHuman ? '내 차례입니다' : `${G.players[G.turn].name} 차례`);
+
+  renderLog();
+  renderHand();
+  updateActionState();
+}
+function badgeEl(text, cls){ const d=document.createElement('div'); d.className='status-badge '+(cls||''); d.textContent=text; return d; }
+
+function renderLog(){
+  const el=document.getElementById('log');
+  const last=G.log.slice(-3).join(' · ');
+  el.textContent=last;
+}
+function renderHand(){
+  const wrap=document.getElementById('myHand');
+  wrap.innerHTML='';
+  const me=G.players[0];
+  me.hand.forEach(t=>{
+    const el=tileEl(t,'htile');
+    if(selection.has(tileId(t))) el.classList.add('selected');
+    el.addEventListener('click', ()=>{
+      if(G.finished || G.turn!==0) return;
+      const id=tileId(t);
+      if(selection.has(id)) selection.delete(id); else selection.add(id);
+      renderHand(); updateActionState();
+    });
+    wrap.appendChild(el);
+  });
+  document.getElementById('handInfoLeft').textContent = `내 타일 (${me.hand.length}장)`;
+  document.getElementById('handInfoRight').textContent = G.requiredCount==null ? '자유롭게 내기' : `${G.requiredCount}장 · 이전보다 높게`;
+}
+function updateActionState(){
+  const playBtn=document.getElementById('playBtn');
+  const passBtn=document.getElementById('passBtn');
+  const recBtn=document.getElementById('recommendBtn');
+  const myTurn = G && !G.finished && G.turn===0;
+  playBtn.disabled = !myTurn || selection.size===0;
+  passBtn.disabled = !myTurn || G.requiredCount==null;
+  recBtn.disabled = !myTurn;
+}
+function showFeedback(msg){
+  const el=document.getElementById('feedback');
+  el.textContent=msg;
+  if(feedbackTimer) clearTimeout(feedbackTimer);
+  feedbackTimer=setTimeout(()=>{ el.textContent=''; }, 2200);
+}
+
+/* ============================ 액션 버튼 ============================ */
+document.getElementById('playBtn').addEventListener('click', ()=>{
+  if(!G || G.turn!==0) return;
+  const me=G.players[0];
+  const tiles = me.hand.filter(t=>selection.has(tileId(t)));
+  doPlay(0, tiles);
+});
+document.getElementById('passBtn').addEventListener('click', ()=>{
+  if(!G || G.turn!==0) return;
+  doPass(0);
+});
+document.getElementById('recommendBtn').addEventListener('click', ()=>{
+  if(!G || G.turn!==0) return;
+  const me=G.players[0];
+  const tiles=aiFindPlay(me.hand, G.requiredCount, G.lastCombo);
+  if(!tiles){ showFeedback(G.requiredCount==null ? '추천할 조합이 없습니다.' : '낼 수 있는 조합이 없습니다. 패스하세요.'); return; }
+  selection = new Set(tiles.map(tileId));
+  renderHand(); updateActionState();
+  showFeedback('추천 조합을 선택했습니다. 마음에 들면 "내기"를 눌러주세요.');
+});
+document.getElementById('log').addEventListener('click', ()=>{
+  if(!G) return;
+  openModal(`<h2>로그</h2><div class="logFull">${G.log.map(l=>`<div>${l}</div>`).join('')}</div>
+    <div class="modal-actions"><button class="btn" id="closeLogBtn">닫기</button></div>`);
+  document.getElementById('closeLogBtn').onclick=closeModal;
+});
+document.getElementById('newGameBtn').addEventListener('click', confirmNewGame);
+
+/* ============================ 모달 ============================ */
+function openModal(html){
+  document.getElementById('modalBox').innerHTML=html;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); }
+
+function confirmNewGame(){
+  openModal(`<h2>새 매치</h2><p class="sub" style="text-align:center;">진행 중인 매치를 종료하고 새로 시작하시겠습니까?</p>
+    <div class="modal-actions"><button class="btn ghost" id="cancelNG">아니오</button><button class="btn" id="confirmNG">예</button></div>`);
+  document.getElementById('cancelNG').onclick=closeModal;
+  document.getElementById('confirmNG').onclick=async ()=>{ await clearSavedGame(); startMatch(); };
+}
+function showRoundResultModal(roundScores, counts, winnerIdx){
+  const rows = G.players.map((p,i)=>`
+    <div class="score-row"><span>${p.name} ${i===winnerIdx?'(승리)':`· 남은 ${counts[i]}장`}</span>
+    <span class="val ${roundScores[i]>=0?'pos':'neg'}">${roundScores[i]>=0?'+':''}${roundScores[i]}</span></div>`).join('');
+  const isLastRound = matchState.round>=matchState.totalRounds;
+  openModal(`<h2>${matchState.round}라운드 결과</h2>
+    ${rows}
+    <div class="modal-actions">
+      <button class="btn" id="roundNextBtn">${isLastRound?'최종 결과 보기':'다음 라운드'}</button>
+    </div>`);
+  document.getElementById('roundNextBtn').onclick=()=>{
+    if(isLastRound){ showFinalResultModal(); }
+    else { matchState.round++; startRound(); }
+  };
+}
+function showFinalResultModal(){
+  const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
+  const medals=['🥇','🥈','🥉','4위'];
+  const rows=order.map((idx,rank)=>`
+    <div class="rank-row"><span class="medal">${medals[rank]}</span>
+    <span style="flex:1;">${G.players[idx].name}</span>
+    <span class="val">${matchState.scores[idx]}점</span></div>`).join('');
+  openModal(`<h2>최종 결과</h2>${rows}
+    <div class="modal-actions"><button class="btn" id="finalNewBtn">새 매치 시작</button></div>`);
+  document.getElementById('finalNewBtn').onclick=async ()=>{ await clearSavedGame(); startMatch(); };
+}
+function showStartModal(){
+  openModal(`<h2>렉시오 · LEXIO</h2>
+    <p class="sub">
+    4인 고정 (나 + AI 3명) · 각자 13장씩 시작합니다.<br><br>
+    · 순서: 싱글(1) &lt; 페어(2) &lt; 트리플(3) &lt; 메이드(5). 4장은 낼 수 없습니다.<br>
+    · 숫자 순위: 2 &gt; 1 &gt; 13 &gt; 12 &gt; … &gt; 3<br>
+    · 같은 숫자는 해 &gt; 달 &gt; 별 &gt; 구름 순<br>
+    · 메이드(5장): 스트레이트플러시 &gt; 포카드 &gt; 풀하우스 &gt; 플러시 &gt; 스트레이트<br>
+    · 구름3을 가진 사람이 첫 선(先)이 됩니다.<br>
+    · 모두 패스하면 마지막으로 낸 사람이 다시 선이 됩니다.<br>
+    · 한 명이 타일을 다 내면 그 라운드는 즉시 종료, 남은 타일 수로 점수를 계산합니다 (총 ${TOTAL_ROUNDS}라운드).
+    </p>
+    <div class="modal-actions"><button class="btn" id="startBtn">게임 시작</button></div>`);
+  document.getElementById('startBtn').onclick=()=>{ startMatch(); };
+}
+
+/* ============================ 저장/불러오기 ============================ */
+let saveTimer=null;
+function queueSave(){ if(saveTimer) clearTimeout(saveTimer); saveTimer=setTimeout(saveGameState, 300); }
+async function saveGameState(){
+  if(!G) return;
+  try{ await window.storage.set('lexio_save', JSON.stringify({G, matchState}), false); }catch(e){}
+}
+function flushSaveNow(){ if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; } saveGameState(); }
+async function clearSavedGame(){ try{ await window.storage.delete('lexio_save', false); }catch(e){} }
+
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) flushSaveNow(); });
+window.addEventListener('pagehide', flushSaveNow);
+window.addEventListener('beforeunload', flushSaveNow);
+window.addEventListener('blur', flushSaveNow);
+
+/* ============================ 초기화 ============================ */
+(async function init(){
+  try{
+    const res=await window.storage.get('lexio_save', false);
+    if(res && res.value){
+      const data=JSON.parse(res.value);
+      if(data && data.G && data.matchState){
+        matchState=data.matchState;
+        G=data.G;
+        render();
+        if(!G.finished) scheduleTurnIfAI();
+        return;
+      }
+    }
+  }catch(e){}
+  showStartModal();
+})();
+
+})();
+</script>
+</body>
+</html>
