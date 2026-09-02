@@ -66,6 +66,9 @@
     border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--gold-bright);font-family:'Black Han Sans';position:relative;}
   .seat.turn .avatar{border-color:var(--gold-bright);box-shadow:0 0 0 4px #e8c27a33, 0 0 14px #e8c27a88;}
   .seat .name{font-size:11px;color:var(--ivory);opacity:.9;white-space:nowrap;}
+  .seat .name .seatScore{opacity:.8;font-weight:700;}
+  .seat .name .seatScore.pos{color:#8ee0a8;}
+  .seat .name .seatScore.neg{color:#ef9d7d;}
   .seat .cardcount{font-size:9px;opacity:.6;}
   .leader-badge{position:absolute;top:-6px;right:-6px;background:var(--gold-bright);color:#3a2a0a;font-size:9px;font-weight:900;border-radius:8px;padding:1px 5px;white-space:nowrap;}
 
@@ -106,10 +109,10 @@
   .logFull{max-height:50vh;overflow-y:auto;font-size:12px;line-height:1.9;color:#f5ecd7;background:#00000030;border-radius:10px;padding:10px 12px;margin-bottom:12px;}
 
   /* hand */
-  #handWrap{position:relative;padding:14px 6px 12px;background:linear-gradient(180deg, transparent, #170e20 40%);}
-  #handInfo{display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px;font-size:11px;color:var(--gold-bright);gap:8px;}
+  #handWrap{position:relative;padding:6px 6px 10px;background:linear-gradient(180deg, transparent, #170e20 40%);}
   #feedback{text-align:center;font-size:11px;color:#ef9d7d;min-height:14px;margin-bottom:2px;}
-  #myHand{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:14px 8px 8px;max-height:38vh;overflow-y:auto;}
+  /* 손패가 1줄이든 2줄이든 항상 같은 높이를 차지하도록 고정 높이 + 세로 중앙 정렬 */
+  #myHand{display:flex;flex-wrap:wrap;align-content:center;gap:6px;justify-content:center;padding:2px 8px;height:136px;overflow-y:auto;}
   #myHand::-webkit-scrollbar{display:none;}
   .htile{width:40px;height:54px;border-radius:7px;background:linear-gradient(160deg,#fffdf6,#e9dfc4);
     box-shadow:0 2px 4px #00000060;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -170,6 +173,78 @@
   .xp-bar-wrap{background:#00000045;border-radius:8px;height:10px;overflow:hidden;margin:4px 0 2px;}
   .xp-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-bright));border-radius:8px;transition:width .5s ease;}
   .xp-gain-row{display:flex;justify-content:space-between;font-size:11.5px;padding:3px 2px;color:var(--ivory);opacity:.85;}
+
+  /* ---------- 라운드별 XP / 레벨 정산 (마이티 온라인 스타일) ---------- */
+  .xpModal{ text-align:center; }
+  .xpLevelRow{ display:flex; align-items:center; justify-content:center; gap:14px; margin:6px 0 16px; }
+  .xpLevelBadge{
+    width:72px;height:72px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold));
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:#3a2a0a;font-family:'Black Han Sans';box-shadow:0 4px 14px #00000060, 0 0 0 3px #e8c27a44;
+    position:relative; flex-shrink:0; overflow:hidden;
+  }
+  .xpLevelBadge .lv-num{font-size:24px;line-height:1;}
+  .xpLevelBadge .lv-label{font-size:9px;letter-spacing:1px;margin-top:1px;}
+  .xpLevelBadge.leveling{ animation: levelBounce 0.7s ease; }
+  @keyframes levelBounce{
+    0%{ transform:scale(1); }
+    30%{ transform:scale(1.35) rotate(-6deg); box-shadow:0 4px 26px #e8c27acc, 0 0 0 6px #e8c27a66; }
+    55%{ transform:scale(0.92) rotate(4deg); }
+    100%{ transform:scale(1) rotate(0); }
+  }
+  .xpBarWrap{ flex:1; text-align:left; min-width:0; }
+  .xpBarLabel{ display:flex; justify-content:space-between; font-size:11px; color:#f5ecd7cc; margin-bottom:4px; gap:6px; }
+  .xpBarLabel>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+  .xpBarTrack{ width:100%; height:14px; border-radius:8px; background:#00000045; overflow:hidden; border:1px solid #ffffff1a; }
+  .xpBarFill{
+    height:100%; width:0%; border-radius:8px;
+    background:linear-gradient(90deg,var(--gold),var(--gold-bright));
+    box-shadow:0 0 10px #e8c27a88;
+    transition: width 0.9s cubic-bezier(.2,.8,.3,1);
+  }
+  .xpGainText{
+    font-family:'Black Han Sans'; font-size:26px; color:var(--gold-bright);
+    margin:2px 0 6px; opacity:0; transform:translateY(6px);
+    animation: xpGainIn 0.5s ease forwards 0.15s;
+  }
+  @keyframes xpGainIn{ to{ opacity:1; transform:translateY(0); } }
+  .levelUpBanner{
+    font-family:'Black Han Sans'; font-size:20px; letter-spacing:1px;
+    color:#3a2a0a; background:linear-gradient(90deg,var(--gold-bright),#ffe9b8,var(--gold-bright));
+    border-radius:12px; padding:10px 14px; margin:4px 0 16px;
+    opacity:0; transform:scale(.85);
+    animation: levelUpIn 0.55s cubic-bezier(.34,1.56,.64,1) forwards 0.35s;
+    box-shadow:0 6px 20px #e8c27a55;
+    overflow-wrap:break-word;
+  }
+  @keyframes levelUpIn{ to{ opacity:1; transform:scale(1); } }
+  .xpBreakdown{ text-align:left; margin:4px 0 16px; }
+  .xpBreakdown .xpRow{
+    display:flex; justify-content:space-between; font-size:12.5px;
+    padding:6px 10px; border-radius:8px; background:#00000030; margin-bottom:5px;
+    opacity:0; transform:translateX(-8px);
+    animation: xpRowIn 0.35s ease forwards;
+    gap:6px;overflow:hidden;
+  }
+  .xpBreakdown .xpRow>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+  .xpBreakdown .xpRow .amt{ color:#8ee0a8; font-weight:800; flex-shrink:0; }
+  @keyframes xpRowIn{ to{ opacity:1; transform:translateX(0); } }
+  .xpStreak{
+    display:inline-block; font-size:11px; color:#f0cd8a; background:#f0cd8a22;
+    border:1px solid #f0cd8a55; border-radius:16px; padding:3px 10px; margin-bottom:10px;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .confettiWrap{ position:relative; height:0; overflow:visible; }
+  .confetti{
+    position:absolute; top:-10px; font-size:16px;
+    animation: confettiFall 1.4s ease-in forwards;
+    opacity:0.95;
+  }
+  @keyframes confettiFall{
+    0%{ transform:translateY(0) rotate(0deg); opacity:1; }
+    100%{ transform:translateY(140px) rotate(340deg); opacity:0; }
+  }
 </style>
 </head>
 <body>
@@ -191,7 +266,6 @@
     <div id="log"></div>
   </div>
   <div id="handWrap">
-    <div id="handInfo"><span id="handInfoLeft">내 타일</span><span id="handInfoRight"></span></div>
     <div id="feedback"></div>
     <div id="myHand"></div>
     <div id="actionBar">
@@ -489,7 +563,14 @@ function aiFindPlay(hand, requiredCount, prevCombo){
       (a.ev.combo.made.category===2 ? 0 : a.ev.combo.made.value-b.ev.combo.made.value));
   }
   if(!candidates.length) return null;
-  // 상위 몇 개 후보 중 몬테카를로로 승률이 가장 높은 패를 골라서 낸다.
+  if(count===1){
+    // 싱글 따라내기는 "딱 이길 수 있는 가장 낮은 패로 이기고, 높은 싱글은 나중에 상대의 강한
+    // 패를 견제할 카드로 아껴둔다"는 정석이 이미 최선이라 몬테카를로 없이 그대로 따른다.
+    // (표본이 적은 몬테카를로는 오히려 이 정석을 뒤집는 잡음을 만들 수 있다.)
+    return candidates[0].tiles;
+  }
+  // 페어/트리플/5장 조합은 어떤 걸 깨서 내는 게 유리한지가 더 복잡하므로, 상위 후보 중
+  // 몬테카를로로 승률이 가장 높은 패를 골라서 낸다.
   const selfIdx=aiSelfIdxOf(hand);
   if(selfIdx>=0 && candidates.length>1){
     const shortlist=candidates.slice(0,4).map(x=>x.tiles);
@@ -499,7 +580,7 @@ function aiFindPlay(hand, requiredCount, prevCombo){
 }
 
 /* ============================ 경험치 / 레벨 프로필 (매치와 무관하게 영구 저장) ============================ */
-const profile = { level:1, xp:0, totalGames:0, totalWins:0, currentStreak:0, bestStreak:0 };
+const profile = { level:1, xp:0, totalGames:0, totalWins:0, totalRounds:0, totalRoundWins:0, currentStreak:0, bestStreak:0 };
 async function loadProfile(){
   try{
     const res = await window.storage.get('lexio_profile', false);
@@ -509,18 +590,19 @@ async function loadProfile(){
 async function saveProfile(){ try{ await window.storage.set('lexio_profile', JSON.stringify(profile), false); }catch(e){} }
 function xpToNextLevel(level){ return 100 + (level-1)*35; }
 function levelProgressPercent(level, xp){ return Math.max(0, Math.min(100, (xp/xpToNextLevel(level))*100)); }
-function computeXpGain(rank, myScore, scores){
+// 라운드가 끝날 때마다(마이티 온라인처럼) 그 라운드 성적을 기준으로 XP를 정산한다.
+function computeRoundXpGain(rank, myScore, scores){
   const breakdown=[];
-  if(rank===0){ breakdown.push({label:'🏆 1위', amount:30}); }
-  else if(rank===1){ breakdown.push({label:'🥈 2위', amount:8}); }
-  else if(rank===2){ breakdown.push({label:'🥉 3위', amount:-4}); }
-  else{ breakdown.push({label:'4위', amount:-12}); }
+  if(rank===0){ breakdown.push({label:'🏆 라운드 1위', amount:14}); }
+  else if(rank===1){ breakdown.push({label:'🥈 라운드 2위', amount:4}); }
+  else if(rank===2){ breakdown.push({label:'🥉 라운드 3위', amount:-3}); }
+  else{ breakdown.push({label:'라운드 4위', amount:-8}); }
   const avgOthers = (scores.reduce((a,b)=>a+b,0)-myScore) / (scores.length-1);
   const margin = myScore-avgOthers;
-  if(rank===0 && margin>0){ const bonus=Math.max(0,Math.min(25,Math.round(margin/2))); if(bonus>0) breakdown.push({label:'💥 압승 보너스', amount:bonus}); }
+  if(rank===0 && margin>0){ const bonus=Math.max(0,Math.min(12,Math.round(margin/3))); if(bonus>0) breakdown.push({label:'💥 압승 보너스', amount:bonus}); }
   if(rank===0){ profile.currentStreak+=1; profile.bestStreak=Math.max(profile.bestStreak, profile.currentStreak); }
   else{ profile.currentStreak=0; }
-  if(rank===0 && profile.currentStreak>=2){ const sb=Math.min(20,(profile.currentStreak-1)*4); breakdown.push({label:`🔥 ${profile.currentStreak}연승 보너스`, amount:sb}); }
+  if(rank===0 && profile.currentStreak>=2){ const sb=Math.min(15,(profile.currentStreak-1)*3); breakdown.push({label:`🔥 ${profile.currentStreak}라운드 연승`, amount:sb}); }
   const xp = breakdown.reduce((s,b)=>s+b.amount,0);
   return {xp, breakdown};
 }
@@ -533,15 +615,25 @@ function applyXpGain(gain){
   if(profile.level<=1 && profile.xp<0) profile.xp=0;
   return {startLevel, startXp, levelUps, levelDowns};
 }
+// 이번 라운드 결과(roundScores)를 이 기기의 영구 프로필(레벨/XP)에 반영한다.
+function applyRoundResultToProfile(roundScores){
+  const order=[0,1,2,3].slice().sort((a,b)=>roundScores[b]-roundScores[a]);
+  const rank = order.indexOf(0);
+  profile.totalRounds += 1;
+  if(rank===0) profile.totalRoundWins += 1;
+  const {xp:xpGain, breakdown} = computeRoundXpGain(rank, roundScores[0], roundScores);
+  const {startLevel, startXp, levelUps, levelDowns} = applyXpGain(xpGain);
+  saveProfile();
+  return {rank, xpGain, breakdown, startLevel, startXp, levelUps, levelDowns, streak:profile.currentStreak};
+}
+// 매치 전체가 끝났을 때(최종 순위) 누적 전적만 별도로 기록한다. (XP는 이미 라운드마다 정산됨)
 function applyMatchResultToProfile(){
   const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
   const rank = order.indexOf(0);
   profile.totalGames += 1;
   if(rank===0) profile.totalWins += 1;
-  const {xp:xpGain, breakdown} = computeXpGain(rank, matchState.scores[0], matchState.scores);
-  const {startLevel, startXp, levelUps, levelDowns} = applyXpGain(xpGain);
   saveProfile();
-  return {rank, xpGain, breakdown, startLevel, startXp, levelUps, levelDowns};
+  return {rank};
 }
 
 /* ============================ 상태 ============================ */
@@ -556,10 +648,13 @@ function addLog(msg){ G.log.push(msg); }
 /* ============================ 라운드 진행 ============================ */
 function startMatch(settings){
   settings = settings || {endMode:'rounds', totalRounds:TOTAL_ROUNDS, startScore:0};
-  const startScore = settings.endMode==='bust' ? (settings.startScore||50) : 0;
+  const totalRounds = settings.endMode==='bust' ? Infinity : (settings.totalRounds||TOTAL_ROUNDS);
+  // 라운드제도 0점에서 시작하면 중간에 점수가 마이너스로 내려가 헷갈리므로,
+  // 라운드 수 × 10점을 기본 점수로 깔고 시작한다.
+  const startScore = settings.endMode==='bust' ? (settings.startScore||50) : totalRounds*10;
   matchState = {
     round:1,
-    totalRounds: settings.endMode==='bust' ? Infinity : (settings.totalRounds||TOTAL_ROUNDS),
+    totalRounds,
     endMode: settings.endMode==='bust' ? 'bust' : 'rounds',
     startScore,
     scores:[0,0,0,0].map(()=>startScore),
@@ -676,8 +771,13 @@ function finishRound(winnerIdx){
   if(isLastRound) matchState.matchOver=true;
   addLog(`${G.players[winnerIdx].name}님이 타일을 모두 내고 라운드 승리!`);
   render();
-  showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound);
   queueSave();
+  // 마지막으로 낸 패를 잠깐 볼 수 있도록, 결과창은 살짝 늦게 띄운다 (AI가 냈을 때는 더 여유있게)
+  const resultDelay = G.players[winnerIdx].isHuman ? 700 : 1700;
+  setTimeout(()=>{
+    if(!G || !G.finished || G.winner!==winnerIdx) return;
+    showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound);
+  }, resultDelay);
 }
 
 /* ============================ 렌더링 ============================ */
@@ -722,7 +822,7 @@ function render(){
     seat.style.left=SEAT_POS[i].left; seat.style.top=SEAT_POS[i].top;
     seat.innerHTML=`
       <div class="avatar">${p.name}${G.leader===i?'<div class="leader-badge">선</div>':''}</div>
-      <div class="name">${p.name}</div>
+      <div class="name">${p.name} <span class="seatScore ${matchState.scores[i]>=0?'pos':'neg'}">${matchState.scores[i]>=0?'+':''}${matchState.scores[i]}</span></div>
       <div class="cardcount">${p.hand.length}장</div>`;
     seatsWrap.appendChild(seat);
   });
@@ -731,12 +831,12 @@ function render(){
   const labelEl=document.getElementById('lastComboLabel');
   const tilesEl=document.getElementById('lastComboTiles');
   tilesEl.innerHTML='';
-  if(G.finished){
-    labelEl.textContent = `라운드 종료 · ${G.players[G.winner].name} 승리`;
-  } else if(!G.lastCombo){
-    labelEl.textContent = `${G.players[G.leader].name}님이 자유롭게 냅니다`;
+  if(!G.lastCombo){
+    labelEl.textContent = G.finished ? `라운드 종료 · ${G.players[G.winner].name} 승리` : `${G.players[G.leader].name}님이 자유롭게 냅니다`;
   } else {
-    labelEl.textContent = `${G.players[G.lastCombo.owner].name} · ${describeCombo(G.lastCombo)}`;
+    labelEl.textContent = G.finished
+      ? `라운드 종료 · ${G.players[G.winner].name} 승리`
+      : `${G.players[G.lastCombo.owner].name} · ${describeCombo(G.lastCombo)}`;
     const from = FLY_FROM[G.lastCombo.owner] || FLY_FROM[0];
     G.lastCombo.tiles.forEach((t,i)=>{
       const el=tileEl(t,'tile');
@@ -787,8 +887,6 @@ function renderHand(){
     });
     wrap.appendChild(el);
   });
-  document.getElementById('handInfoLeft').textContent = `내 타일 (${me.hand.length}장)`;
-  document.getElementById('handInfoRight').textContent = G.requiredCount==null ? '자유롭게 내기' : `${G.requiredCount}장 · 이전보다 높게`;
 }
 function updateActionState(){
   const playBtn=document.getElementById('playBtn');
@@ -838,9 +936,7 @@ document.getElementById('recommendBtn').addEventListener('click', ()=>{
 });
 document.getElementById('log').addEventListener('click', ()=>{
   if(!G) return;
-  openModal(`<h2>로그</h2><div class="logFull">${G.log.map(l=>`<div>${l}</div>`).join('')}</div>
-    <div class="modal-actions"><button class="btn" id="closeLogBtn">닫기</button></div>`);
-  document.getElementById('closeLogBtn').onclick=closeModal;
+  openLogModal();
 });
 document.getElementById('newGameBtn').addEventListener('click', confirmNewGame);
 document.getElementById('ruleBtn').addEventListener('click', showRulesModal);
@@ -851,6 +947,14 @@ function openModal(html){
   document.getElementById('modalOverlay').classList.add('show');
 }
 function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); }
+// 로그 모달. onBack이 주어지면(결과창 등에서 열었을 때) "닫기" 대신 "돌아가기"로 표시하고
+// 눌렀을 때 원래 화면(onBack)으로 돌아간다. 없으면 그냥 모달을 닫는다.
+function openLogModal(onBack){
+  if(!G) return;
+  openModal(`<h2>로그</h2><div class="logFull">${G.log.map(l=>`<div>${l}</div>`).join('')}</div>
+    <div class="modal-actions"><button class="btn" id="closeLogBtn">${onBack?'돌아가기':'닫기'}</button></div>`);
+  document.getElementById('closeLogBtn').onclick = onBack || closeModal;
+}
 
 function confirmNewGame(){
   openModal(`<h2>새 매치</h2><p class="sub" style="text-align:center;">진행 중인 매치를 종료하고 새로 시작하시겠습니까?</p>
@@ -879,15 +983,105 @@ function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastR
     <div class="settle-list">${settleRows || '<div class="settle-row">정산할 내역이 없습니다.</div>'}</div>
     ${bustHint}
     <div class="modal-actions">
+      <button class="btn ghost" id="roundLogBtn">📜 로그</button>
       <button class="btn" id="roundNextBtn">${isLastRound?'최종 결과 보기':'다음 라운드'}</button>
     </div>`);
   document.getElementById('roundNextBtn').onclick=()=>{
-    if(isLastRound){ showFinalResultModal(); }
-    else { closeModal(); matchState.round++; startRound(); }
+    showRoundXpModal(()=>{
+      if(isLastRound){ showFinalResultModal(); }
+      else { closeModal(); matchState.round++; startRound(); }
+    });
+  };
+  document.getElementById('roundLogBtn').onclick=()=>{
+    openLogModal(()=>showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound));
   };
 }
+// 마이티 온라인처럼, 라운드가 끝날 때마다 그 라운드 성적으로 레벨/경험치를 정산해서 보여준다.
+function showRoundXpModal(onDone){
+  const histEntry = matchState.history[matchState.history.length-1];
+  let r = histEntry.xpResult;
+  if(!histEntry.xpApplied){
+    r = applyRoundResultToProfile(histEntry.roundScores);
+    histEntry.xpApplied = true;
+    histEntry.xpResult = r;
+    queueSave();
+  }
+  const startLevel=r.startLevel, startXp=r.startXp;
+  const endLevel=profile.level, endXp=profile.xp;
+  const leveledUp = r.levelUps && r.levelUps.length>0;
+  const leveledDown = r.levelDowns && r.levelDowns.length>0;
+  const startPct = levelProgressPercent(startLevel, startXp);
+  const finalPct = levelProgressPercent(endLevel, endXp);
+
+  const breakdownHtml = r.breakdown.map((b,i)=>
+    `<div class="xpRow" style="animation-delay:${0.5+i*0.12}s"><span>${b.label}</span><span class="amt" style="${b.amount<0?'color:#ef9d7d;':''}">${b.amount>=0?'+':''}${b.amount}</span></div>`
+  ).join('');
+
+  const confettiEmojis=['🎉','✨','🎊','⭐','💫'];
+  const confettiHtml = leveledUp ? Array.from({length:14}).map((_,i)=>{
+    const left=Math.round(Math.random()*100);
+    const delay=(Math.random()*0.4).toFixed(2);
+    const emoji=confettiEmojis[i%confettiEmojis.length];
+    return `<span class="confetti" style="left:${left}%;animation-delay:${delay}s;">${emoji}</span>`;
+  }).join('') : '';
+
+  openModal(`
+    <div class="xpModal">
+      <h2 style="text-align:center;">${r.xpGain>=0?'경험치 획득!':'경험치 감소'}</h2>
+      ${leveledUp?`<div class="confettiWrap">${confettiHtml}</div>`:''}
+      <div class="xpGainText" style="${r.xpGain<0?'color:#ef9d7d;':''}">${r.xpGain>=0?'+':''}${r.xpGain} XP</div>
+      ${r.streak>=2?`<div class="xpStreak">🔥 ${r.streak}라운드 연승 중!</div>`:''}
+      ${leveledUp?`<div class="levelUpBanner">🎉 LEVEL UP! Lv.${startLevel} → Lv.${endLevel} 🎉</div>`:''}
+      ${leveledDown?`<div class="levelUpBanner" style="background:linear-gradient(90deg,#c97a7a,#e8a8a8,#c97a7a);color:#3a0a0a;">📉 LEVEL DOWN. Lv.${startLevel} → Lv.${endLevel}</div>`:''}
+      <div class="xpLevelRow">
+        <div class="xpLevelBadge" id="xpLevelBadge">
+          <div class="lv-num" id="xpLevelNum">${startLevel}</div>
+          <div class="lv-label">LEVEL</div>
+        </div>
+        <div class="xpBarWrap">
+          <div class="xpBarLabel"><span id="xpBarLabelText">${Math.round(startXp)} / ${xpToNextLevel(startLevel)} XP</span><span>Lv.${startLevel===endLevel?endLevel:(startLevel+' → '+endLevel)}</span></div>
+          <div class="xpBarTrack"><div class="xpBarFill" id="xpBarFill" style="width:${startPct}%"></div></div>
+        </div>
+      </div>
+      <div class="xpBreakdown">${breakdownHtml}</div>
+      <p class="sub" style="text-align:center;">누적 ${profile.totalRoundWins||0}승 / ${profile.totalRounds||0}라운드 · 최고 연승 ${profile.bestStreak}회</p>
+      <div class="modal-actions"><button class="btn" id="xpContinueBtn">계속하기</button></div>
+    </div>
+  `);
+
+  const fill=document.getElementById('xpBarFill');
+  const badge=document.getElementById('xpLevelBadge');
+  const lvNum=document.getElementById('xpLevelNum');
+  const labelText=document.getElementById('xpBarLabelText');
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      if(!leveledUp){
+        if(fill) fill.style.width=finalPct+'%';
+        if(labelText) labelText.textContent=`${Math.round(endXp)} / ${xpToNextLevel(endLevel)} XP`;
+      } else {
+        if(fill) fill.style.width='100%';
+        setTimeout(()=>{
+          if(badge) badge.classList.add('leveling');
+          if(lvNum) lvNum.textContent=endLevel;
+          if(fill){ fill.style.transition='none'; fill.style.width='0%'; }
+          setTimeout(()=>{
+            if(fill){ fill.style.transition='width 0.9s cubic-bezier(.2,.8,.3,1)'; fill.style.width=finalPct+'%'; }
+            if(labelText) labelText.textContent=`${Math.round(endXp)} / ${xpToNextLevel(endLevel)} XP`;
+          },60);
+        },950);
+      }
+    });
+  });
+
+  document.getElementById('xpContinueBtn').onclick=()=>{ closeModal(); onDone(); };
+}
 function showFinalResultModal(){
-  matchState.matchOver=true;
+  if(!matchState.matchOver){ matchState.matchOver=true; }
+  if(!matchState.finalApplied){
+    applyMatchResultToProfile();
+    matchState.finalApplied=true;
+    queueSave();
+  }
   const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
   const medals=['🥇','🥈','🥉','4위'];
   const rows=order.map((idx,rank)=>`
@@ -895,28 +1089,14 @@ function showFinalResultModal(){
     <span style="flex:1;">${G.players[idx].name}</span>
     <span class="val">${matchState.scores[idx]}점</span></div>`).join('');
 
-  let xpResult = matchState.xpResult;
-  if(!matchState.xpApplied){
-    xpResult = applyMatchResultToProfile();
-    matchState.xpApplied = true;
-    matchState.xpResult = xpResult;
-    queueSave();
-  }
-  const gainRows = xpResult.breakdown.map(b=>`
-    <div class="xp-gain-row"><span>${b.label}</span><span>${b.amount>=0?'+':''}${b.amount}</span></div>`).join('');
-  const totalXp = xpResult.breakdown.reduce((s,b)=>s+b.amount,0);
-  const leveledUp = xpResult.levelUps.length>0;
-  const xpBlock = `
-    <div class="settle-title">경험치 (Lv.${profile.level})</div>
-    <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:${levelProgressPercent(profile.level, profile.xp)}%;"></div></div>
-    <p class="sub" style="margin:4px 0 8px;">${Math.round(profile.xp)} / ${xpToNextLevel(profile.level)} xp${leveledUp?' · 🎉 레벨업!':''}</p>
-    ${gainRows}
-    <div class="xp-gain-row" style="border-top:1px solid #ffffff20;padding-top:6px;font-weight:800;"><span>총 획득</span><span>${totalXp>=0?'+':''}${totalXp} xp</span></div>`;
-
   openModal(`<h2>최종 결과</h2>${rows}
-    ${xpBlock}
-    <div class="modal-actions"><button class="btn" id="finalNewBtn">새 매치 시작</button></div>`);
+    <p class="sub" style="text-align:center;margin-top:10px;">경험치는 라운드마다 정산되었습니다 · 현재 Lv.${profile.level}</p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="finalLogBtn">📜 로그</button>
+      <button class="btn" id="finalNewBtn">새 매치 시작</button>
+    </div>`);
   document.getElementById('finalNewBtn').onclick=async ()=>{ await clearSavedGame(); showSetupModal(); };
+  document.getElementById('finalLogBtn').onclick=()=>{ openLogModal(()=>showFinalResultModal()); };
 }
 const RULE_TEXT = `
     4인 고정 (나 + 영호·옥순·순자) · 각자 13장씩 시작합니다.<br><br>
