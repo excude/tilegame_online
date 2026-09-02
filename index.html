@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v1.0 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.002 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -22,6 +22,10 @@
     --moon:#3b6ea5;
     --star:#8a5cc4;
     --cloud:#3e8574;
+    --sun-bg1:#ffe3e2;  --sun-bg2:#ffc6c4;
+    --moon-bg1:#ddf7e3; --moon-bg2:#bdeecb;
+    --star-bg1:#fff7d1; --star-bg2:#ffecA0;
+    --cloud-bg1:#dcebff; --cloud-bg2:#b9d6ff;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100% !important;text-size-adjust:100% !important;}
   html,body{height:100%;margin:0;font-size:16px;}
@@ -79,6 +83,10 @@
   .tile.moon .num{color:var(--moon);}
   .tile.star .num{color:var(--star);}
   .tile.cloud .num{color:var(--cloud);}
+  .tile.sun{background:linear-gradient(160deg,var(--sun-bg1),var(--sun-bg2));}
+  .tile.moon{background:linear-gradient(160deg,var(--moon-bg1),var(--moon-bg2));}
+  .tile.star{background:linear-gradient(160deg,var(--star-bg1),var(--star-bg2));}
+  .tile.cloud{background:linear-gradient(160deg,var(--cloud-bg1),var(--cloud-bg2));}
   .tile.fly-in{animation:tileFlyIn .42s cubic-bezier(.2,.7,.3,1) both;}
   @keyframes tileFlyIn{
     from{ transform:translate(var(--fx,0),var(--fy,0)) scale(.5) rotate(var(--fr,0deg)); opacity:0; }
@@ -112,10 +120,16 @@
   .htile.moon .num{color:var(--moon);}
   .htile.star .num{color:var(--star);}
   .htile.cloud .num{color:var(--cloud);}
+  .htile.sun{background:linear-gradient(160deg,var(--sun-bg1),var(--sun-bg2));}
+  .htile.moon{background:linear-gradient(160deg,var(--moon-bg1),var(--moon-bg2));}
+  .htile.star{background:linear-gradient(160deg,var(--star-bg1),var(--star-bg2));}
+  .htile.cloud{background:linear-gradient(160deg,var(--cloud-bg1),var(--cloud-bg2));}
   .htile.selected{transform:translateY(-10px);box-shadow:0 0 0 2px var(--gold-bright), 0 6px 10px #00000070;}
 
-  #actionBar{display:flex;gap:8px;padding:0 8px;}
-  #recommendBtn{flex:0.85;}
+  #actionBar{display:flex;gap:6px;padding:0 8px;}
+  #recommendBtn{flex:0.8;}
+  #sortBtn{flex:0.8;}
+  #recommendBtn,#sortBtn{padding:12px 4px;font-size:12.5px;}
   .btn{flex:1;padding:12px;border-radius:12px;border:none;font-size:14px;font-weight:800;cursor:pointer;
     background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#2a1c0d;}
   .btn:active{filter:brightness(.92);}
@@ -135,13 +149,35 @@
   .score-row .val.neg{color:#ef9d7d;}
   .rank-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #ffffff15;}
   .rank-row .medal{font-family:'Black Han Sans';color:var(--gold-bright);width:26px;}
+
+  /* setup / rule modal extras */
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .suit-opt{flex:1;min-width:70px;text-align:center;padding:10px 4px;border-radius:10px;
+    border:1px solid var(--line);cursor:pointer;font-size:14px;background:#00000030;color:var(--ivory);overflow:hidden;}
+  .suit-opt.sel{border-color:var(--gold-bright);background:#f0cd8a22;box-shadow:0 0 10px #f0cd8a44;color:var(--gold-bright);font-weight:800;}
+
+  /* 정산 내역 (누구한테 얼마 받고 주고) */
+  .settle-title{font-size:11px;color:var(--ivory);opacity:.7;margin:12px 0 4px;}
+  .settle-list{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
+  .settle-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 8px;border-radius:8px;background:#00000025;}
+  .settle-row .amt{color:#8ee0a8;font-weight:800;}
+
+  /* 레벨 / xp */
+  #ruleBtn{background:none;border:1px solid var(--line);color:var(--ivory);border-radius:50%;width:26px;height:26px;
+    font-size:13px;font-weight:800;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;}
+  #ruleBtn:active{background:#00000040;}
+  .status-badge.lvl{color:#f0cd8a;border-color:#e8c27a88;font-weight:800;}
+  .xp-bar-wrap{background:#00000045;border-radius:8px;height:10px;overflow:hidden;margin:4px 0 2px;}
+  .xp-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-bright));border-radius:8px;transition:width .5s ease;}
+  .xp-gain-row{display:flex;justify-content:space-between;font-size:11.5px;padding:3px 2px;color:var(--ivory);opacity:.85;}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.001</span><span>LEXIO · 나 + AI 3</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.002</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
+    <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
   </div>
   <div id="statusStrip"></div>
@@ -160,6 +196,7 @@
     <div id="myHand"></div>
     <div id="actionBar">
       <button class="btn ghost" id="recommendBtn">💡 추천</button>
+      <button class="btn ghost" id="sortBtn">🔀 숫자순</button>
       <button class="btn ghost" id="passBtn">패스</button>
       <button class="btn" id="playBtn">내기</button>
     </div>
@@ -198,6 +235,11 @@ function shuffle(arr){
   return arr;
 }
 function sortHandInPlace(h){ h.sort((a,b)=>singleValue(a)-singleValue(b)); }
+// 손패 정렬 모드: 'number'=숫자 우선순위, 'suit'=무늬 우선순위
+let handSortMode = 'number';
+function sortByNumberPriority(h){ h.sort((a,b)=>singleValue(a)-singleValue(b)); }
+function sortBySuitPriority(h){ h.sort((a,b)=> (suitOrder(a.suit)-suitOrder(b.suit)) || (numStrength(a.num)-numStrength(b.num)) ); }
+function applyCurrentHandSort(h){ if(handSortMode==='suit') sortBySuitPriority(h); else sortByNumberPriority(h); }
 
 function kCombos(arr,k){
   const res=[]; const combo=[];
@@ -288,6 +330,7 @@ function beatsCombo(newCombo, prevCombo){
   return newCombo.strength > prevCombo.strength;
 }
 
+const AI_NAMES = {1:'영호', 2:'옥순', 3:'순자'};
 /* ============================ AI ============================ */
 function aiFindPlay(hand, requiredCount, prevCombo){
   if(requiredCount==null){
@@ -329,9 +372,55 @@ function aiFindPlay(hand, requiredCount, prevCombo){
   return candidates[0].tiles;
 }
 
+/* ============================ 경험치 / 레벨 프로필 (매치와 무관하게 영구 저장) ============================ */
+const profile = { level:1, xp:0, totalGames:0, totalWins:0, currentStreak:0, bestStreak:0 };
+async function loadProfile(){
+  try{
+    const res = await window.storage.get('lexio_profile', false);
+    if(res && res.value){ const data=JSON.parse(res.value); if(data) Object.assign(profile, data); }
+  }catch(e){ /* 첫 실행 */ }
+}
+async function saveProfile(){ try{ await window.storage.set('lexio_profile', JSON.stringify(profile), false); }catch(e){} }
+function xpToNextLevel(level){ return 100 + (level-1)*35; }
+function levelProgressPercent(level, xp){ return Math.max(0, Math.min(100, (xp/xpToNextLevel(level))*100)); }
+function computeXpGain(rank, myScore, scores){
+  const breakdown=[];
+  if(rank===0){ breakdown.push({label:'🏆 1위', amount:30}); }
+  else if(rank===1){ breakdown.push({label:'🥈 2위', amount:8}); }
+  else if(rank===2){ breakdown.push({label:'🥉 3위', amount:-4}); }
+  else{ breakdown.push({label:'4위', amount:-12}); }
+  const avgOthers = (scores.reduce((a,b)=>a+b,0)-myScore) / (scores.length-1);
+  const margin = myScore-avgOthers;
+  if(rank===0 && margin>0){ const bonus=Math.max(0,Math.min(25,Math.round(margin/2))); if(bonus>0) breakdown.push({label:'💥 압승 보너스', amount:bonus}); }
+  if(rank===0){ profile.currentStreak+=1; profile.bestStreak=Math.max(profile.bestStreak, profile.currentStreak); }
+  else{ profile.currentStreak=0; }
+  if(rank===0 && profile.currentStreak>=2){ const sb=Math.min(20,(profile.currentStreak-1)*4); breakdown.push({label:`🔥 ${profile.currentStreak}연승 보너스`, amount:sb}); }
+  const xp = breakdown.reduce((s,b)=>s+b.amount,0);
+  return {xp, breakdown};
+}
+function applyXpGain(gain){
+  const startLevel=profile.level, startXp=profile.xp;
+  profile.xp += gain;
+  const levelUps=[], levelDowns=[];
+  while(profile.xp >= xpToNextLevel(profile.level)){ profile.xp -= xpToNextLevel(profile.level); profile.level+=1; levelUps.push(profile.level); }
+  while(profile.xp < 0 && profile.level>1){ profile.level-=1; profile.xp += xpToNextLevel(profile.level); levelDowns.push(profile.level); }
+  if(profile.level<=1 && profile.xp<0) profile.xp=0;
+  return {startLevel, startXp, levelUps, levelDowns};
+}
+function applyMatchResultToProfile(){
+  const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
+  const rank = order.indexOf(0);
+  profile.totalGames += 1;
+  if(rank===0) profile.totalWins += 1;
+  const {xp:xpGain, breakdown} = computeXpGain(rank, matchState.scores[0], matchState.scores);
+  const {startLevel, startXp, levelUps, levelDowns} = applyXpGain(xpGain);
+  saveProfile();
+  return {rank, xpGain, breakdown, startLevel, startXp, levelUps, levelDowns};
+}
+
 /* ============================ 상태 ============================ */
 let G = null;
-let matchState = { round:1, totalRounds:TOTAL_ROUNDS, scores:[0,0,0,0], history:[] };
+let matchState = { round:1, totalRounds:TOTAL_ROUNDS, endMode:'rounds', startScore:0, scores:[0,0,0,0], history:[], matchOver:false };
 let selection = new Set();
 let feedbackTimer = null;
 let lastRenderedComboKey = null;
@@ -339,8 +428,18 @@ let lastRenderedComboKey = null;
 function addLog(msg){ G.log.push(msg); }
 
 /* ============================ 라운드 진행 ============================ */
-function startMatch(){
-  matchState = { round:1, totalRounds:TOTAL_ROUNDS, scores:[0,0,0,0], history:[] };
+function startMatch(settings){
+  settings = settings || {endMode:'rounds', totalRounds:TOTAL_ROUNDS, startScore:0};
+  const startScore = settings.endMode==='bust' ? (settings.startScore||50) : 0;
+  matchState = {
+    round:1,
+    totalRounds: settings.endMode==='bust' ? Infinity : (settings.totalRounds||TOTAL_ROUNDS),
+    endMode: settings.endMode==='bust' ? 'bust' : 'rounds',
+    startScore,
+    scores:[0,0,0,0].map(()=>startScore),
+    history:[],
+    matchOver:false,
+  };
   startRound();
   closeModal();
 }
@@ -348,11 +447,11 @@ function startRound(){
   const deck=shuffle(buildDeck());
   const hands=[[],[],[],[]];
   for(let i=0;i<deck.length;i++) hands[i%N_PLAYERS].push(deck[i]);
-  hands.forEach(sortHandInPlace);
+  hands.forEach(applyCurrentHandSort);
   let leader = hands.findIndex(h=>h.some(t=>t.suit==='cloud' && t.num===3));
   if(leader<0) leader=0;
   G = {
-    players:[0,1,2,3].map(i=>({idx:i, name:i===0?'나':`AI ${i}`, isHuman:i===0, hand:hands[i]})),
+    players:[0,1,2,3].map(i=>({idx:i, name:i===0?'나':AI_NAMES[i], isHuman:i===0, hand:hands[i]})),
     leader, turn:leader, lastCombo:null, requiredCount:null, passCount:0,
     log:[], finished:false, winner:null,
   };
@@ -362,7 +461,13 @@ function startRound(){
   scheduleTurnIfAI();
   queueSave();
 }
-function advanceTurn(){ G.turn=(G.turn+1)%N_PLAYERS; }
+// 화면상 자리 배치(0:나/하단 · 1:영호/상단 · 2:옥순/우측 · 3:순자/좌측) 기준으로
+// 시계방향(나 → 순자[좌] → 영호[상] → 옥순[우] → 나)으로 턴이 돌도록 순서를 고정한다.
+const TURN_ORDER = [0,3,1,2];
+function advanceTurn(){
+  const pos = TURN_ORDER.indexOf(G.turn);
+  G.turn = TURN_ORDER[(pos+1)%TURN_ORDER.length];
+}
 
 function doPlay(playerIdx, tiles){
   const ev=evaluatePlay(tiles, G.requiredCount);
@@ -418,16 +523,34 @@ function scheduleTurnIfAI(){
     }, 600+Math.random()*550);
   }
 }
+// 남은 타일 수 차이를 기준으로 누가 누구에게 얼마를 주고받는지 1:1로 전부 정산한다.
+// (플레이어별 순net 점수 합계는 기존 방식과 동일하게 0이 되지만, 그 내역을 항목별로 보여줄 수 있다)
+function computeTransfers(counts){
+  const transfers=[];
+  for(let i=0;i<N_PLAYERS;i++){
+    for(let j=i+1;j<N_PLAYERS;j++){
+      const diff = counts[j]-counts[i];
+      if(diff>0) transfers.push({from:j, to:i, amount:diff});
+      else if(diff<0) transfers.push({from:i, to:j, amount:-diff});
+    }
+  }
+  return transfers;
+}
 function finishRound(winnerIdx){
   G.finished=true; G.winner=winnerIdx;
   const counts=G.players.map(p=>p.hand.length);
   const total=counts.reduce((a,b)=>a+b,0);
   const roundScores=counts.map(c=>total-N_PLAYERS*c);
+  const transfers=computeTransfers(counts);
   roundScores.forEach((s,i)=>matchState.scores[i]+=s);
-  matchState.history.push({round:matchState.round, counts:counts.slice(), roundScores});
+  const isLastRound = matchState.endMode==='bust'
+    ? matchState.scores.some(s=>s<=0)
+    : matchState.round>=matchState.totalRounds;
+  matchState.history.push({round:matchState.round, counts:counts.slice(), roundScores, transfers, winnerIdx, isLastRound});
+  if(isLastRound) matchState.matchOver=true;
   addLog(`${G.players[winnerIdx].name}님이 타일을 모두 내고 라운드 승리!`);
   render();
-  showRoundResultModal(roundScores, counts, winnerIdx);
+  showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound);
   queueSave();
 }
 
@@ -444,7 +567,9 @@ const FLY_FROM = { 0:{fx:'0px',fy:'150px'}, 1:{fx:'0px',fy:'-140px'}, 2:{fx:'140
 
 function render(){
   if(!G) return;
-  document.getElementById('roundTag').textContent = `${matchState.round} / ${matchState.totalRounds} 라운드`;
+  document.getElementById('roundTag').textContent = matchState.endMode==='bust'
+    ? `${matchState.round}라운드 · 점수제`
+    : `${matchState.round} / ${matchState.totalRounds} 라운드`;
   const comboKey = G.lastCombo
     ? ('c:'+G.lastCombo.owner+':'+G.lastCombo.tiles.map(tileId).slice().sort().join(','))
     : ('free:'+G.leader+':'+G.passCount+':'+matchState.round);
@@ -455,6 +580,7 @@ function render(){
   const strip=document.getElementById('statusStrip');
   strip.innerHTML='';
   const meScore=matchState.scores[0];
+  strip.appendChild(badgeEl(`Lv.${profile.level}`, 'lvl'));
   strip.appendChild(badgeEl(`내 점수 ${meScore>=0?'+':''}${meScore}`, 'me'));
   strip.appendChild(badgeEl(`선: ${G.players[G.leader].name}`, 'leader'));
   strip.appendChild(badgeEl(`요구: ${G.requiredCount==null?'자유':G.requiredCount+'장'}`, 'turn'));
@@ -469,7 +595,7 @@ function render(){
     seat.className='seat'+(G.turn===i?' turn':'')+(justPlayed?' playing':'');
     seat.style.left=SEAT_POS[i].left; seat.style.top=SEAT_POS[i].top;
     seat.innerHTML=`
-      <div class="avatar">AI${i}${G.leader===i?'<div class="leader-badge">선</div>':''}</div>
+      <div class="avatar">${p.name}${G.leader===i?'<div class="leader-badge">선</div>':''}</div>
       <div class="name">${p.name}</div>
       <div class="cardcount">${p.hand.length}장</div>`;
     seatsWrap.appendChild(seat);
@@ -500,9 +626,18 @@ function render(){
   }
   document.getElementById('turnFlash').textContent = G.finished ? '' : (G.players[G.turn].isHuman ? '내 차례입니다' : `${G.players[G.turn].name} 차례`);
 
+  autoSelectRecommendedForMyTurn();
   renderLog();
   renderHand();
   updateActionState();
+}
+// 내 차례가 되면 "추천" 버튼을 누른 것처럼 추천 조합을 기본으로 선택해둔다.
+function autoSelectRecommendedForMyTurn(){
+  if(!G || G.finished || G.turn!==0) return;
+  if(selection.size>0) return;
+  const me=G.players[0];
+  const tiles=aiFindPlay(me.hand, G.requiredCount, G.lastCombo);
+  if(tiles) selection = new Set(tiles.map(tileId));
 }
 function badgeEl(text, cls){ const d=document.createElement('div'); d.className='status-badge '+(cls||''); d.textContent=text; return d; }
 
@@ -533,10 +668,13 @@ function updateActionState(){
   const playBtn=document.getElementById('playBtn');
   const passBtn=document.getElementById('passBtn');
   const recBtn=document.getElementById('recommendBtn');
+  const sortBtn=document.getElementById('sortBtn');
   const myTurn = G && !G.finished && G.turn===0;
   playBtn.disabled = !myTurn || selection.size===0;
   passBtn.disabled = !myTurn || G.requiredCount==null;
   recBtn.disabled = !myTurn;
+  sortBtn.disabled = !G || G.finished;
+  sortBtn.textContent = handSortMode==='suit' ? '🔀 무늬순' : '🔀 숫자순';
 }
 function showFeedback(msg){
   const el=document.getElementById('feedback');
@@ -556,6 +694,13 @@ document.getElementById('passBtn').addEventListener('click', ()=>{
   if(!G || G.turn!==0) return;
   doPass(0);
 });
+document.getElementById('sortBtn').addEventListener('click', ()=>{
+  if(!G || G.finished) return;
+  handSortMode = handSortMode==='number' ? 'suit' : 'number';
+  applyCurrentHandSort(G.players[0].hand);
+  renderHand();
+  updateActionState();
+});
 document.getElementById('recommendBtn').addEventListener('click', ()=>{
   if(!G || G.turn!==0) return;
   const me=G.players[0];
@@ -572,6 +717,7 @@ document.getElementById('log').addEventListener('click', ()=>{
   document.getElementById('closeLogBtn').onclick=closeModal;
 });
 document.getElementById('newGameBtn').addEventListener('click', confirmNewGame);
+document.getElementById('ruleBtn').addEventListener('click', showRulesModal);
 
 /* ============================ 모달 ============================ */
 function openModal(html){
@@ -584,48 +730,132 @@ function confirmNewGame(){
   openModal(`<h2>새 매치</h2><p class="sub" style="text-align:center;">진행 중인 매치를 종료하고 새로 시작하시겠습니까?</p>
     <div class="modal-actions"><button class="btn ghost" id="cancelNG">아니오</button><button class="btn" id="confirmNG">예</button></div>`);
   document.getElementById('cancelNG').onclick=closeModal;
-  document.getElementById('confirmNG').onclick=async ()=>{ await clearSavedGame(); startMatch(); };
+  document.getElementById('confirmNG').onclick=async ()=>{ await clearSavedGame(); showSetupModal(); };
 }
-function showRoundResultModal(roundScores, counts, winnerIdx){
+function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound){
+  if(transfers===undefined){
+    // 저장된 게임을 불러와 복원하는 경우를 대비한 안전장치
+    transfers = computeTransfers(counts);
+  }
+  if(isLastRound===undefined){
+    isLastRound = matchState.endMode==='bust' ? matchState.scores.some(s=>s<=0) : matchState.round>=matchState.totalRounds;
+  }
   const rows = G.players.map((p,i)=>`
     <div class="score-row"><span>${p.name} ${i===winnerIdx?'(승리)':`· 남은 ${counts[i]}장`}</span>
     <span class="val ${roundScores[i]>=0?'pos':'neg'}">${roundScores[i]>=0?'+':''}${roundScores[i]}</span></div>`).join('');
-  const isLastRound = matchState.round>=matchState.totalRounds;
+  const settleRows = transfers.map(t=>`
+    <div class="settle-row"><span>${G.players[t.from].name} → ${G.players[t.to].name}</span><span class="amt">${t.amount}점</span></div>`).join('');
+  const bustHint = matchState.endMode==='bust' && isLastRound
+    ? `<p class="sub" style="text-align:center;color:#ef9d7d;">0점 이하가 된 플레이어가 있어 매치가 종료됩니다.</p>` : '';
   openModal(`<h2>${matchState.round}라운드 결과</h2>
     ${rows}
+    <div class="settle-title">정산 내역 (누가 누구에게 얼마를)</div>
+    <div class="settle-list">${settleRows || '<div class="settle-row">정산할 내역이 없습니다.</div>'}</div>
+    ${bustHint}
     <div class="modal-actions">
       <button class="btn" id="roundNextBtn">${isLastRound?'최종 결과 보기':'다음 라운드'}</button>
     </div>`);
   document.getElementById('roundNextBtn').onclick=()=>{
     if(isLastRound){ showFinalResultModal(); }
-    else { matchState.round++; startRound(); }
+    else { closeModal(); matchState.round++; startRound(); }
   };
 }
 function showFinalResultModal(){
+  matchState.matchOver=true;
   const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
   const medals=['🥇','🥈','🥉','4위'];
   const rows=order.map((idx,rank)=>`
     <div class="rank-row"><span class="medal">${medals[rank]}</span>
     <span style="flex:1;">${G.players[idx].name}</span>
     <span class="val">${matchState.scores[idx]}점</span></div>`).join('');
+
+  let xpResult = matchState.xpResult;
+  if(!matchState.xpApplied){
+    xpResult = applyMatchResultToProfile();
+    matchState.xpApplied = true;
+    matchState.xpResult = xpResult;
+    queueSave();
+  }
+  const gainRows = xpResult.breakdown.map(b=>`
+    <div class="xp-gain-row"><span>${b.label}</span><span>${b.amount>=0?'+':''}${b.amount}</span></div>`).join('');
+  const totalXp = xpResult.breakdown.reduce((s,b)=>s+b.amount,0);
+  const leveledUp = xpResult.levelUps.length>0;
+  const xpBlock = `
+    <div class="settle-title">경험치 (Lv.${profile.level})</div>
+    <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:${levelProgressPercent(profile.level, profile.xp)}%;"></div></div>
+    <p class="sub" style="margin:4px 0 8px;">${Math.round(profile.xp)} / ${xpToNextLevel(profile.level)} xp${leveledUp?' · 🎉 레벨업!':''}</p>
+    ${gainRows}
+    <div class="xp-gain-row" style="border-top:1px solid #ffffff20;padding-top:6px;font-weight:800;"><span>총 획득</span><span>${totalXp>=0?'+':''}${totalXp} xp</span></div>`;
+
   openModal(`<h2>최종 결과</h2>${rows}
+    ${xpBlock}
     <div class="modal-actions"><button class="btn" id="finalNewBtn">새 매치 시작</button></div>`);
-  document.getElementById('finalNewBtn').onclick=async ()=>{ await clearSavedGame(); startMatch(); };
+  document.getElementById('finalNewBtn').onclick=async ()=>{ await clearSavedGame(); showSetupModal(); };
 }
-function showStartModal(){
-  openModal(`<h2>렉시오 · LEXIO</h2>
-    <p class="sub">
-    4인 고정 (나 + AI 3명) · 각자 13장씩 시작합니다.<br><br>
+const RULE_TEXT = `
+    4인 고정 (나 + 영호·옥순·순자) · 각자 13장씩 시작합니다.<br><br>
     · 순서: 싱글(1) &lt; 페어(2) &lt; 트리플(3) &lt; 메이드(5). 4장은 낼 수 없습니다.<br>
     · 숫자 순위: 2 &gt; 1 &gt; 13 &gt; 12 &gt; … &gt; 3<br>
     · 같은 숫자는 해 &gt; 달 &gt; 별 &gt; 구름 순<br>
     · 메이드(5장): 스트레이트플러시 &gt; 포카드 &gt; 풀하우스 &gt; 플러시 &gt; 스트레이트<br>
     · 구름3을 가진 사람이 첫 선(先)이 됩니다.<br>
     · 모두 패스하면 마지막으로 낸 사람이 다시 선이 됩니다.<br>
-    · 한 명이 타일을 다 내면 그 라운드는 즉시 종료, 남은 타일 수로 점수를 계산합니다 (총 ${TOTAL_ROUNDS}라운드).
-    </p>
-    <div class="modal-actions"><button class="btn" id="startBtn">게임 시작</button></div>`);
-  document.getElementById('startBtn').onclick=()=>{ startMatch(); };
+    · 한 명이 타일을 다 내면 그 라운드는 즉시 종료, 남은 타일 수 차이만큼 정산합니다.<br>
+    · 라운드제: 정해진 판 수를 모두 마치면 총점이 가장 높은 사람이 우승입니다.<br>
+    · 점수제: 시작 점수에서 매 라운드 정산하며, 누구든 0점 이하가 되면 매치가 종료됩니다.
+`;
+function showRulesModal(){
+  openModal(`<h2>렉시오 · LEXIO 규칙</h2>
+    <p class="sub">${RULE_TEXT}</p>
+    <div class="modal-actions"><button class="btn" id="closeRuleBtn">닫기</button></div>`);
+  document.getElementById('closeRuleBtn').onclick=closeModal;
+}
+
+const ROUND_PRESETS=[3,5,7,10];
+let setupEndMode='rounds';
+let setupTotalRounds=TOTAL_ROUNDS;
+function showSetupModal(){
+  setupEndMode='rounds';
+  setupTotalRounds=TOTAL_ROUNDS;
+  renderSetupModal();
+}
+function renderSetupModal(){
+  openModal(`<h2>렉시오 · LEXIO</h2>
+    <p class="sub" style="text-align:center;">4인 고정 (나 + 영호·옥순·순자) · 각자 13장씩 시작합니다.</p>
+    <p class="sub">진행 방식</p>
+    <div class="row" id="endModeRow">
+      <div class="suit-opt${setupEndMode==='rounds'?' sel':''}" data-mode="rounds">📅 라운드제</div>
+      <div class="suit-opt${setupEndMode==='bust'?' sel':''}" data-mode="bust">💯 점수제</div>
+    </div>
+    <div id="roundCountSection" style="display:${setupEndMode==='rounds'?'':'none'};">
+      <p class="sub">총 라운드 수</p>
+      <div class="row" id="roundPresetRow">
+        ${ROUND_PRESETS.map(n=>`<div class="suit-opt${n===setupTotalRounds?' sel':''}" data-n="${n}">${n}판</div>`).join('')}
+      </div>
+    </div>
+    <div id="startScoreSection" style="display:${setupEndMode==='bust'?'':'none'};">
+      <p class="sub">시작 점수 (보통 50점)</p>
+      <div class="row"><input type="number" id="startScoreInput" value="50" min="10" max="999"
+        style="flex:1;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#0000002a;color:var(--ivory);font-size:14px;"></div>
+      <p class="sub">누구든 점수가 0점 이하가 되면 그 라운드를 끝으로 매치가 종료됩니다.</p>
+    </div>
+    <div class="modal-actions"><button class="btn" id="setupStartBtn">게임 시작</button></div>`);
+
+  document.querySelectorAll('#endModeRow .suit-opt').forEach(el=>{
+    el.addEventListener('click', ()=>{ setupEndMode=el.dataset.mode; renderSetupModal(); });
+  });
+  document.querySelectorAll('#roundPresetRow .suit-opt').forEach(el=>{
+    el.addEventListener('click', ()=>{ setupTotalRounds=parseInt(el.dataset.n,10); renderSetupModal(); });
+  });
+  document.getElementById('setupStartBtn').onclick=()=>{
+    if(setupEndMode==='bust'){
+      const v=parseInt(document.getElementById('startScoreInput').value,10);
+      const startScore=isNaN(v)?50:Math.max(10,Math.min(999,v));
+      startMatch({endMode:'bust', startScore});
+    } else {
+      startMatch({endMode:'rounds', totalRounds:setupTotalRounds});
+    }
+  };
 }
 
 /* ============================ 저장/불러오기 ============================ */
@@ -645,6 +875,7 @@ window.addEventListener('blur', flushSaveNow);
 
 /* ============================ 초기화 ============================ */
 (async function init(){
+  await loadProfile();
   try{
     const res=await window.storage.get('lexio_save', false);
     if(res && res.value){
@@ -652,13 +883,26 @@ window.addEventListener('blur', flushSaveNow);
       if(data && data.G && data.matchState){
         matchState=data.matchState;
         G=data.G;
+        if(!matchState.endMode) matchState.endMode='rounds';
+        // JSON은 Infinity를 저장할 수 없어 null로 바뀌므로 점수제 매치는 불러올 때 다시 채워준다
+        if(matchState.endMode==='bust') matchState.totalRounds=Infinity;
+        else if(matchState.totalRounds===null || matchState.totalRounds===undefined) matchState.totalRounds=TOTAL_ROUNDS;
         render();
-        if(!G.finished) scheduleTurnIfAI();
+        if(G.finished){
+          // 마지막으로 종료된 시점(라운드 결과 / 최종 결과)을 그대로 다시 보여준다
+          if(matchState.matchOver){ showFinalResultModal(); }
+          else{
+            const last=matchState.history[matchState.history.length-1];
+            if(last) showRoundResultModal(last.roundScores, last.counts, last.winnerIdx, last.transfers, last.isLastRound);
+          }
+        } else {
+          scheduleTurnIfAI();
+        }
         return;
       }
     }
   }catch(e){}
-  showStartModal();
+  showSetupModal();
 })();
 
 })();
