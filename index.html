@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.002 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.003 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -175,7 +175,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.002</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.003</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
     <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
@@ -333,6 +333,11 @@ function beatsCombo(newCombo, prevCombo){
 const AI_NAMES = {1:'영호', 2:'옥순', 3:'순자'};
 /* ============================ AI ============================ */
 function aiFindPlay(hand, requiredCount, prevCombo){
+  const tally={};
+  hand.forEach(t=>{ (tally[t.num]=tally[t.num]||[]).push(t); });
+  // 어떤 숫자를 가진 타일이 몇 장 모여있는지(=더 상위 조합을 만들 수 있는 잠재력)
+  function groupSize(num){ return (tally[num]||[]).length; }
+
   if(requiredCount==null){
     if(hand.length===5){
       const ev=evaluatePlay(hand,null);
@@ -342,14 +347,14 @@ function aiFindPlay(hand, requiredCount, prevCombo){
       const combos5=kCombos(hand,5);
       for(const c of combos5){ const ev=evaluatePlay(c,null); if(ev.ok && ev.combo.made.category===1) return c; }
     }
-    const tally={};
-    hand.forEach(t=>{ (tally[t.num]=tally[t.num]||[]).push(t); });
     const byNum = Object.keys(tally).sort((a,b)=>numStrength(Number(a))-numStrength(Number(b)));
     const withTriple = byNum.filter(n=>tally[n].length>=3);
     const withPair = byNum.filter(n=>tally[n].length>=2);
     if(withTriple.length && Math.random()<0.35) return tally[withTriple[0]].slice(0,3);
     if(withPair.length && Math.random()<0.45) return tally[withPair[0]].slice(0,2);
-    const sorted=[...hand].sort((a,b)=>singleValue(a)-singleValue(b));
+    // 싱글로 낼 때는, 페어/트리플/포카드를 이룰 수 있는(=상위 족보 잠재력이 있는) 타일보다
+    // 짝이 없는 순수 싱글 타일을 우선한다.
+    const sorted=[...hand].sort((a,b)=> (groupSize(a.num)-groupSize(b.num)) || (singleValue(a)-singleValue(b)) );
     return [sorted[0]];
   }
   const count=requiredCount;
@@ -357,11 +362,14 @@ function aiFindPlay(hand, requiredCount, prevCombo){
   if(count===1){
     candidates = hand.map(t=>({tiles:[t], ev:evaluatePlay([t],1)}))
       .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
-    candidates.sort((a,b)=>a.ev.combo.strength-b.ev.combo.strength);
+    // 페어/트리플/포카드를 만들 수 있는 타일(더블 이상을 만족)은 가급적 싱글로 소모하지 않는다.
+    candidates.sort((a,b)=> (groupSize(a.tiles[0].num)-groupSize(b.tiles[0].num)) || (a.ev.combo.strength-b.ev.combo.strength) );
   } else if(count===2 || count===3){
     candidates = kCombos(hand,count).map(c=>({tiles:c, ev:evaluatePlay(c,count)}))
       .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
-    candidates.sort((a,b)=>a.ev.combo.strength-b.ev.combo.strength);
+    // 트리플/포카드를 만들 수 있는 숫자를 쪼개 페어로 내기보다, 정확히 그 개수만큼만 있는
+    // (=더 상위 족보로 이어지지 않는) 조합을 우선한다.
+    candidates.sort((a,b)=> (groupSize(a.tiles[0].num)-groupSize(b.tiles[0].num)) || (a.ev.combo.strength-b.ev.combo.strength) );
   } else if(count===5){
     candidates = kCombos(hand,5).map(c=>({tiles:c, ev:evaluatePlay(c,5)}))
       .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
