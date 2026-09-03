@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.004 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.005 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -250,7 +250,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.004</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.005</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
     <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
@@ -583,11 +583,11 @@ function aiFindPlay(hand, requiredCount, prevCombo){
 const profile = { level:1, xp:0, totalGames:0, totalWins:0, totalRounds:0, totalRoundWins:0, currentStreak:0, bestStreak:0 };
 async function loadProfile(){
   try{
-    const res = await window.storage.get('lexio_profile', false);
-    if(res && res.value){ const data=JSON.parse(res.value); if(data) Object.assign(profile, data); }
+    const raw = localStorage.getItem('lexio_profile');
+    if(raw){ const data=JSON.parse(raw); if(data) Object.assign(profile, data); }
   }catch(e){ /* 첫 실행 */ }
 }
-async function saveProfile(){ try{ await window.storage.set('lexio_profile', JSON.stringify(profile), false); }catch(e){} }
+async function saveProfile(){ try{ localStorage.setItem('lexio_profile', JSON.stringify(profile)); }catch(e){} }
 function xpToNextLevel(level){ return 100 + (level-1)*35; }
 function levelProgressPercent(level, xp){ return Math.max(0, Math.min(100, (xp/xpToNextLevel(level))*100)); }
 // 라운드가 끝날 때마다(마이티 온라인처럼) 그 라운드 성적을 기준으로 XP를 정산한다.
@@ -1169,10 +1169,10 @@ let saveTimer=null;
 function queueSave(){ if(saveTimer) clearTimeout(saveTimer); saveTimer=setTimeout(saveGameState, 300); }
 async function saveGameState(){
   if(!G) return;
-  try{ await window.storage.set('lexio_save', JSON.stringify({G, matchState}), false); }catch(e){}
+  try{ localStorage.setItem('lexio_save', JSON.stringify({G, matchState})); }catch(e){}
 }
 function flushSaveNow(){ if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; } saveGameState(); }
-async function clearSavedGame(){ try{ await window.storage.delete('lexio_save', false); }catch(e){} }
+async function clearSavedGame(){ try{ localStorage.removeItem('lexio_save'); }catch(e){} }
 
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden) flushSaveNow(); });
 window.addEventListener('pagehide', flushSaveNow);
@@ -1183,9 +1183,9 @@ window.addEventListener('blur', flushSaveNow);
 (async function init(){
   await loadProfile();
   try{
-    const res=await window.storage.get('lexio_save', false);
-    if(res && res.value){
-      const data=JSON.parse(res.value);
+    const raw=localStorage.getItem('lexio_save');
+    if(raw){
+      const data=JSON.parse(raw);
       if(data && data.G && data.matchState){
         matchState=data.matchState;
         G=data.G;
