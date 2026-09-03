@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.006 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.008 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -150,6 +150,7 @@
   .score-row .val{font-weight:800;}
   .score-row .val.pos{color:#8ee0a8;}
   .score-row .val.neg{color:#ef9d7d;}
+  .score-row .val .cur{font-weight:600;font-size:11px;color:var(--ivory-dim,#c9b89a);opacity:.75;margin-left:4px;}
   .rank-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #ffffff15;}
   .rank-row .medal{font-family:'Black Han Sans';color:var(--gold-bright);width:26px;}
 
@@ -250,7 +251,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.006</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.008</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
     <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
@@ -807,7 +808,7 @@ function render(){
   strip.innerHTML='';
   const meScore=matchState.scores[0];
   strip.appendChild(badgeEl(`Lv.${profile.level} · ${Math.round(profile.xp)}/${xpToNextLevel(profile.level)}xp`, 'lvl'));
-  strip.appendChild(badgeEl(`내 점수 ${meScore>=0?'+':''}${meScore}`, 'me'));
+  strip.appendChild(badgeEl(`내 점수 ${meScore}`, 'me'));
   strip.appendChild(badgeEl(`선: ${G.players[G.leader].name}`, 'leader'));
   strip.appendChild(badgeEl(`요구: ${G.requiredCount==null?'자유':G.requiredCount+'장'}`, 'turn'));
 
@@ -822,7 +823,7 @@ function render(){
     seat.style.left=SEAT_POS[i].left; seat.style.top=SEAT_POS[i].top;
     seat.innerHTML=`
       <div class="avatar">${p.name}${G.leader===i?'<div class="leader-badge">선</div>':''}</div>
-      <div class="name">${p.name} <span class="seatScore ${matchState.scores[i]>=0?'pos':'neg'}">${matchState.scores[i]>=0?'+':''}${matchState.scores[i]}</span></div>
+      <div class="name">${p.name} <span class="seatScore ${matchState.scores[i]>=0?'pos':'neg'}">${matchState.scores[i]}</span></div>
       <div class="cardcount">${p.hand.length}장</div>`;
     seatsWrap.appendChild(seat);
   });
@@ -970,9 +971,12 @@ function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastR
   if(isLastRound===undefined){
     isLastRound = matchState.endMode==='bust' ? matchState.scores.some(s=>s<=0) : matchState.round>=matchState.totalRounds;
   }
-  const rows = G.players.map((p,i)=>`
+  const rows = G.players.map((p,i)=>{
+    const delta=roundScores[i];
+    return `
     <div class="score-row"><span>${p.name} ${i===winnerIdx?'(승리)':`· 남은 ${counts[i]}장`}</span>
-    <span class="val ${roundScores[i]>=0?'pos':'neg'}">${roundScores[i]>=0?'+':''}${roundScores[i]}</span></div>`).join('');
+    <span class="val ${delta>=0?'pos':'neg'}">${delta}<span class="cur">(${matchState.scores[i]}점)</span></span></div>`;
+  }).join('');
   const settleRows = transfers.map(t=>`
     <div class="settle-row"><span>${G.players[t.from].name} → ${G.players[t.to].name}</span><span class="amt">${t.amount}점</span></div>`).join('');
   const bustHint = matchState.endMode==='bust' && isLastRound
