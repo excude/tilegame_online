@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.008 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.011 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -251,7 +251,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.008</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.011</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
     <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
@@ -373,11 +373,12 @@ function compareMade(a,b){
   }
   return a.value>b.value;
 }
+function tilesStr(tiles){ return tiles.map(t=>`${t.num}${suitObj(t.suit).symbol}`).join(' '); }
 function describeCombo(c){
-  if(c.kind==='single') return `싱글 (${c.tiles[0].num}${suitObj(c.tiles[0].suit).label})`;
-  if(c.kind==='pair') return `페어 (${c.tiles[0].num})`;
-  if(c.kind==='triple') return `트리플 (${c.tiles[0].num})`;
-  return c.made.label;
+  if(c.kind==='single') return `싱글 (${tilesStr(c.tiles)})`;
+  if(c.kind==='pair') return `페어 (${tilesStr(c.tiles)})`;
+  if(c.kind==='triple') return `트리플 (${tilesStr(c.tiles)})`;
+  return `${c.made.label} (${tilesStr(c.tiles)})`;
 }
 function evaluatePlay(tiles, requiredCount){
   const count=tiles.length;
@@ -678,7 +679,7 @@ function startRound(){
     log:[], finished:false, winner:null,
   };
   selection.clear();
-  addLog(`${matchState.round}라운드 시작. ${G.players[leader].name}님이 구름3을 가지고 있어 선을 잡았습니다.`);
+  addLog(`${matchState.round}라운드 시작. ${G.players[leader].name}님이 ${suitObj('cloud').symbol}3을 가지고 있어 선을 잡았습니다.`);
   render();
   scheduleTurnIfAI();
   queueSave();
@@ -975,15 +976,15 @@ function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastR
     const delta=roundScores[i];
     return `
     <div class="score-row"><span>${p.name} ${i===winnerIdx?'(승리)':`· 남은 ${counts[i]}장`}</span>
-    <span class="val ${delta>=0?'pos':'neg'}">${delta}<span class="cur">(${matchState.scores[i]}점)</span></span></div>`;
+    <span class="val ${delta>=0?'pos':'neg'}">${delta>=0?'+':''}${delta}<span class="cur">(${matchState.scores[i]}점)</span></span></div>`;
   }).join('');
   const settleRows = transfers.map(t=>`
-    <div class="settle-row"><span>${G.players[t.from].name} → ${G.players[t.to].name}</span><span class="amt">${t.amount}점</span></div>`).join('');
+    <div class="settle-row"><span>${G.players[t.from].name} → ${G.players[t.to].name}</span><span class="amt">${t.amount}</span></div>`).join('');
   const bustHint = matchState.endMode==='bust' && isLastRound
     ? `<p class="sub" style="text-align:center;color:#ef9d7d;">0점 이하가 된 플레이어가 있어 매치가 종료됩니다.</p>` : '';
   openModal(`<h2>${matchState.round}라운드 결과</h2>
     ${rows}
-    <div class="settle-title">정산 내역 (누가 누구에게 얼마를)</div>
+    <div class="settle-title">정산 내역</div>
     <div class="settle-list">${settleRows || '<div class="settle-row">정산할 내역이 없습니다.</div>'}</div>
     ${bustHint}
     <div class="modal-actions">
