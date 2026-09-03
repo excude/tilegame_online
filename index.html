@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.012 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.014 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -164,12 +164,15 @@
   .settle-title{font-size:11px;color:var(--ivory);opacity:.7;margin:12px 0 4px;}
   .settle-list{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
   .settle-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 8px;border-radius:8px;background:#00000025;}
-  .settle-row .amt{color:#8ee0a8;font-weight:800;}
+  .settle-row .amt{color:#ef9d7d;font-weight:800;}
 
   /* 레벨 / xp */
   #ruleBtn{background:none;border:1px solid var(--line);color:var(--ivory);border-radius:50%;width:26px;height:26px;
     font-size:13px;font-weight:800;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;}
   #ruleBtn:active{background:#00000040;}
+  #sfxToggle{background:none;border:1px solid var(--line);color:var(--ivory);border-radius:50%;width:26px;height:26px;
+    font-size:13px;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;}
+  #sfxToggle:active{background:#00000040;}
   .status-badge.lvl{color:#f0cd8a;border-color:#e8c27a88;font-weight:800;}
   .xp-bar-wrap{background:#00000045;border-radius:8px;height:10px;overflow:hidden;margin:4px 0 2px;}
   .xp-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-bright));border-radius:8px;transition:width .5s ease;}
@@ -251,8 +254,9 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.012</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.014</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
+    <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
     <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
   </div>
@@ -293,6 +297,132 @@ const SUITS = [
 const N_PLAYERS = 4;
 const NUM_MAX = 13;
 const TOTAL_ROUNDS = 5;
+
+/* ============================ 효과음 (Web Audio API로 직접 합성) ============================
+   외부 mp3 링크는 사이트의 핫링크 차단 정책 때문에 재생이 안 되는 경우가 많아서,
+   브라우저 안에서 직접 소리를 만들어내는 방식으로 구현했습니다. 네트워크나 외부 사이트
+   상태와 무관하게 항상 재생됩니다. (마이티 온라인과 동일한 구조)
+*/
+let sfxCtx = null;
+let sfxMuted = false;
+let sfxUnlocked = false;
+function ensureSfxCtx(){
+  if(!sfxCtx){
+    try{ sfxCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  return sfxCtx;
+}
+// 아이폰 사파리는 화면 전환/전화 수신 등으로 오디오 컨텍스트가 "suspended" 뿐 아니라
+// "interrupted" 상태가 되기도 한다. running이 아니면 상태와 무관하게 무조건 재개를 시도한다.
+function resumeSfxCtx(){
+  const ctx = sfxCtx;
+  if(!ctx) return Promise.resolve(null);
+  if(ctx.state==="running") return Promise.resolve(ctx);
+  return ctx.resume().then(()=>ctx).catch(()=>ctx);
+}
+function getSfxCtx(){
+  const ctx = ensureSfxCtx();
+  if(ctx && ctx.state!=="running") resumeSfxCtx();
+  return ctx;
+}
+// 아이폰 사파리는 실제 사용자 터치 이벤트 "안에서" 오디오를 한 번 재생해야 이후 자동(타이머 등) 재생도
+// 막히지 않는다. 화면을 처음 탭/클릭하는 순간 무음 버퍼를 한 번 실제로 재생시켜 잠금을 확실히 풀어둔다.
+function unlockSfxOnce(){
+  if(sfxUnlocked) return;
+  sfxUnlocked = true;
+  const ctx = ensureSfxCtx();
+  if(!ctx) return;
+  try{
+    const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    src.start(0);
+  }catch(e){}
+  resumeSfxCtx();
+}
+["touchstart","touchend","pointerdown","mousedown","click","keydown"].forEach(evt=>{
+  document.addEventListener(evt, unlockSfxOnce, {once:true, passive:true});
+});
+// 다른 화면(앱 전환 등)에 나갔다 돌아왔을 때 오디오 컨텍스트가 잠들어 있을 수 있어 다시 깨워준다.
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) resumeSfxCtx(); });
+// 하나의 톤(oscillator)을 짧게 재생. freq: 주파수(Hz) 또는 [시작,끝] 배열(글리산도), type: 파형
+function sfxTone(ctx, freq, startTime, duration, {type="sine", gain=0.18, attack=0.005, release=0.05}={}){
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  if(Array.isArray(freq)){
+    osc.frequency.setValueAtTime(freq[0], startTime);
+    osc.frequency.linearRampToValueAtTime(freq[1], startTime+duration);
+  } else {
+    osc.frequency.setValueAtTime(freq, startTime);
+  }
+  g.gain.setValueAtTime(0, startTime);
+  g.gain.linearRampToValueAtTime(gain, startTime+attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, startTime+duration+release);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(startTime);
+  osc.stop(startTime+duration+release+0.02);
+}
+const SFX_PATTERNS = {
+  // 타일 내는 소리: 짧고 마른 클릭
+  tile: (ctx,t)=>{ sfxTone(ctx, [1400,700], t, 0.035, {type:"square", gain:0.12, release:0.02}); },
+  // 패스: 낮고 짧은 둔탁한 소리
+  pass: (ctx,t)=>{ sfxTone(ctx, [260,180], t, 0.06, {type:"sine", gain:0.1, release:0.03}); },
+  // 라운드 승리(타일 다 냄): 밝은 2음 차임
+  roundwin: (ctx,t)=>{
+    sfxTone(ctx, 880, t, 0.09, {type:"triangle", gain:0.16});
+    sfxTone(ctx, 1318.5, t+0.09, 0.14, {type:"triangle", gain:0.16});
+  },
+  // 매치 승리(최종 1위): 상승 아르페지오 팡파레
+  win: (ctx,t)=>{
+    [523.25,659.25,783.99,1046.5].forEach((f,i)=> sfxTone(ctx, f, t+i*0.11, 0.16, {type:"triangle", gain:0.17}));
+  },
+  // 매치 패배(최종 1위 아님): 낮게 처지는 버저
+  lose: (ctx,t)=>{
+    sfxTone(ctx, [330,140], t, 0.35, {type:"sawtooth", gain:0.16, release:0.08});
+  },
+  // 레벨업: 반짝이는 상승 차임 + 마무리 화음
+  levelup: (ctx,t)=>{
+    [523.25,659.25,783.99,1046.5,1318.5].forEach((f,i)=> sfxTone(ctx, f, t+i*0.075, 0.13, {type:"triangle", gain:0.16}));
+    sfxTone(ctx, 1567.98, t+0.4, 0.3, {type:"triangle", gain:0.14});
+  },
+};
+function sfxPlay(key){
+  if(sfxMuted) return;
+  try{
+    const ctx = getSfxCtx();
+    if(!ctx) return;
+    const pattern = SFX_PATTERNS[key];
+    if(!pattern) return;
+    if(ctx.state!=="running"){
+      // 아직 잠겨있는 상태라면 그냥 버리지 않고, 깨어나는 대로 재생한다.
+      resumeSfxCtx().then((resumedCtx)=>{
+        if(resumedCtx && resumedCtx.state==="running" && !sfxMuted) pattern(resumedCtx, resumedCtx.currentTime);
+      });
+      return;
+    }
+    pattern(ctx, ctx.currentTime);
+  }catch(e){ /* 무시 */ }
+}
+function loadSfxPref(){
+  try{
+    const v = localStorage.getItem("lexio_sfx_muted");
+    if(v==="1") sfxMuted = true;
+  }catch(e){ /* 기본값(켜짐) 유지 */ }
+  updateSfxToggleUI();
+}
+function toggleSfx(){
+  sfxMuted = !sfxMuted;
+  updateSfxToggleUI();
+  try{ localStorage.setItem("lexio_sfx_muted", sfxMuted?"1":"0"); }catch(e){}
+  if(!sfxMuted){ getSfxCtx(); }
+}
+function updateSfxToggleUI(){
+  const btn = document.getElementById("sfxToggle");
+  if(btn) btn.textContent = sfxMuted ? "🔇" : "🔊";
+}
+
 
 function suitObj(id){ return SUITS.find(s=>s.id===id); }
 function suitOrder(id){ return suitObj(id).order; }
@@ -707,6 +837,7 @@ function doPlay(playerIdx, tiles){
   G.requiredCount=ev.combo.count;
   G.passCount=0;
   addLog(`${p.name}: ${describeCombo(ev.combo)}`);
+  sfxPlay('tile');
   selection.clear();
   if(p.hand.length===0){ finishRound(playerIdx); return true; }
   advanceTurn();
@@ -721,6 +852,7 @@ function doPass(playerIdx){
     return false;
   }
   addLog(`${G.players[playerIdx].name}: 패스`);
+  sfxPlay('pass');
   G.passCount++;
   if(G.passCount>=N_PLAYERS-1){
     G.leader=G.lastCombo.owner;
@@ -772,6 +904,7 @@ function finishRound(winnerIdx){
   matchState.history.push({round:matchState.round, counts:counts.slice(), roundScores, transfers, winnerIdx, isLastRound});
   if(isLastRound) matchState.matchOver=true;
   addLog(`${G.players[winnerIdx].name}님이 타일을 모두 내고 라운드 승리!`);
+  sfxPlay('roundwin');
   render();
   queueSave();
   // 마지막으로 낸 패를 잠깐 볼 수 있도록, 결과창은 살짝 늦게 띄운다 (AI가 냈을 때는 더 여유있게)
@@ -942,6 +1075,7 @@ document.getElementById('log').addEventListener('click', ()=>{
 });
 document.getElementById('newGameBtn').addEventListener('click', confirmNewGame);
 document.getElementById('ruleBtn').addEventListener('click', showRulesModal);
+document.getElementById('sfxToggle').addEventListener('click', toggleSfx);
 
 /* ============================ 모달 ============================ */
 function openModal(html){
@@ -1015,6 +1149,8 @@ function showRoundXpModal(onDone){
   const endLevel=profile.level, endXp=profile.xp;
   const leveledUp = r.levelUps && r.levelUps.length>0;
   const leveledDown = r.levelDowns && r.levelDowns.length>0;
+  if(leveledUp) setTimeout(()=>sfxPlay('levelup'), 850); // 레벨업 배너가 뜨는 타이밍(0.35s 지연 애니메이션)에 맞춰 재생
+  if(leveledDown) setTimeout(()=>sfxPlay('lose'), 850);
   const startPct = levelProgressPercent(startLevel, startXp);
   const finalPct = levelProgressPercent(endLevel, endXp);
 
@@ -1086,6 +1222,8 @@ function showFinalResultModal(){
     applyMatchResultToProfile();
     matchState.finalApplied=true;
     queueSave();
+    const order0=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
+    sfxPlay(order0.indexOf(0)===0 ? 'win' : 'lose');
   }
   const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
   const medals=['🥇','🥈','🥉','4위'];
@@ -1186,6 +1324,7 @@ window.addEventListener('blur', flushSaveNow);
 
 /* ============================ 초기화 ============================ */
 (async function init(){
+  loadSfxPref();
   await loadProfile();
   try{
     const raw=localStorage.getItem('lexio_save');
