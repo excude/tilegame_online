@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.005 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.006 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -250,7 +250,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.005</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.006</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
     <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
@@ -806,7 +806,7 @@ function render(){
   const strip=document.getElementById('statusStrip');
   strip.innerHTML='';
   const meScore=matchState.scores[0];
-  strip.appendChild(badgeEl(`Lv.${profile.level}`, 'lvl'));
+  strip.appendChild(badgeEl(`Lv.${profile.level} · ${Math.round(profile.xp)}/${xpToNextLevel(profile.level)}xp`, 'lvl'));
   strip.appendChild(badgeEl(`내 점수 ${meScore>=0?'+':''}${meScore}`, 'me'));
   strip.appendChild(badgeEl(`선: ${G.players[G.leader].name}`, 'leader'));
   strip.appendChild(badgeEl(`요구: ${G.requiredCount==null?'자유':G.requiredCount+'장'}`, 'turn'));
