@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.015 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.016 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -254,7 +254,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.015</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.016</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
     <button id="ruleBtn" title="규칙 보기">?</button>
@@ -907,12 +907,20 @@ function computeTransfers(counts){
   }
   return transfers;
 }
+// 숫자 2는 벌점 계산에서 중첩 페널티가 붙는다: 손에 남은 2가 1장당 벌점이 2배씩 곱해진다
+// (2장이면 4배, 3장이면 8배, 4장이면 16배). 실제 남은 타일 수(표시용)와는 별개로,
+// 벌점 정산에만 쓰이는 "환산 장수"를 따로 계산한다.
+function effectiveCount(hand){
+  const twoCount = hand.filter(t=>t.num===2).length;
+  return hand.length * Math.pow(2, twoCount);
+}
 function finishRound(winnerIdx){
   G.finished=true; G.winner=winnerIdx;
-  const counts=G.players.map(p=>p.hand.length);
-  const total=counts.reduce((a,b)=>a+b,0);
-  const roundScores=counts.map(c=>total-N_PLAYERS*c);
-  const transfers=computeTransfers(counts);
+  const counts=G.players.map(p=>p.hand.length); // 실제 남은 장수 (표시용)
+  const effCounts=G.players.map(p=>effectiveCount(p.hand)); // 2 중첩 페널티를 반영한 벌점 계산용 환산 장수
+  const total=effCounts.reduce((a,b)=>a+b,0);
+  const roundScores=effCounts.map(c=>total-N_PLAYERS*c);
+  const transfers=computeTransfers(effCounts);
   roundScores.forEach((s,i)=>matchState.scores[i]+=s);
   const isLastRound = matchState.endMode==='bust'
     ? matchState.scores.some(s=>s<=0)
@@ -1124,8 +1132,10 @@ function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastR
   }
   const rows = G.players.map((p,i)=>{
     const delta=roundScores[i];
+    const twoCount = (p.hand||[]).filter(t=>t.num===2).length;
+    const penaltyHint = (i!==winnerIdx && twoCount>0) ? ` · <span style="color:#ef9d7d;">2 페널티 ×${Math.pow(2,twoCount)}</span>` : '';
     return `
-    <div class="score-row"><span>${p.name} ${i===winnerIdx?'(승리)':`· 남은 ${counts[i]}장`}</span>
+    <div class="score-row"><span>${p.name} ${i===winnerIdx?'(승리)':`· 남은 ${counts[i]}장${penaltyHint}`}</span>
     <span class="val ${delta>=0?'pos':'neg'}">${delta>=0?'+':''}${delta}<span class="cur">(${matchState.scores[i]}점)</span></span></div>`;
   }).join('');
   const settleRows = transfers.map(t=>`
@@ -1266,6 +1276,8 @@ const RULE_TEXT = `
     · 구름3을 가진 사람이 첫 선(先)이 됩니다.<br>
     · 모두 패스하면 마지막으로 낸 사람이 다시 선이 됩니다.<br>
     · 한 명이 타일을 다 내면 그 라운드는 즉시 종료, 남은 타일 수 차이만큼 정산합니다.<br>
+    · 2 페널티: 라운드가 끝날 때 손에 숫자 2가 남아있으면, 2가 1장당 벌점이 2배씩 중첩됩니다
+    (2장이면 4배, 3장이면 8배, 4장이면 16배). 예: 3장 중 2장이 숫자 2라면 3장×4배=12장으로 간주해 정산합니다.<br>
     · 라운드제: 정해진 판 수를 모두 마치면 총점이 가장 높은 사람이 우승입니다.<br>
     · 점수제: 시작 점수에서 매 라운드 정산하며, 누구든 0점 이하가 되면 매치가 종료됩니다.
 `;
