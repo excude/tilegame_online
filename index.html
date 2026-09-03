@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.014 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online Solo v0.015 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -254,7 +254,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.014</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.015</span><span>LEXIO · 나 + 영호·옥순·순자</span></div>
     <div id="roundTag">준비 중</div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
     <button id="ruleBtn" title="규칙 보기">?</button>
@@ -564,7 +564,8 @@ function aiRolloutToEnd(hands, turn, lastCombo, requiredCount, passCount){
   const order=TURN_ORDER;
   let leader = lastCombo ? lastCombo.owner : turn;
   for(let steps=0; steps<250; steps++){
-    let tiles = hands[turn].length ? aiFindPlay(hands[turn], requiredCount, lastCombo) : null;
+    const dangerNow = hands.some((h,i)=>i!==turn && h.length<=2);
+    let tiles = hands[turn].length ? aiFindPlay(hands[turn], requiredCount, lastCombo, dangerNow) : null;
     let played=false;
     if(tiles){
       const ev=evaluatePlay(tiles, requiredCount);
@@ -614,11 +615,19 @@ function aiPickByMonteCarlo(selfIdx, candidateTilesList, requiredCount, prevComb
   return best;
 }
 
-function aiFindPlay(hand, requiredCount, prevCombo){
+function aiFindPlay(hand, requiredCount, prevCombo, dangerNow){
   const tally={};
   hand.forEach(t=>{ (tally[t.num]=tally[t.num]||[]).push(t); });
   // 어떤 숫자를 가진 타일이 몇 장 모여있는지(=더 상위 조합을 만들 수 있는 잠재력)
   function groupSize(num){ return (tally[num]||[]).length; }
+  // 나 말고 다른 누군가가 2장 이하로 남아있으면, 그 사람은 싱글/페어 한 방으로 라운드를
+  // 끝낼 확률이 높다. 이럴 땐 "가장 싼 패로 이기고 강패는 나중에 아껴둔다"는 평소 정석이
+  // 오히려 위험하다 — "나중"이 오기 전에 게임이 끝나버릴 수 있기 때문에, 지금 이 순간
+  // 가장 높은 패로 확실히 견제(=주도권을 붙잡아두는 것)하는 쪽이 낫다.
+  if(dangerNow===undefined){
+    const selfIdx=aiSelfIdxOf(hand);
+    dangerNow = selfIdx>=0 && G.players.some((p,i)=>i!==selfIdx && p.hand.length<=2);
+  }
 
   if(requiredCount==null){
     // 손패가 딱 5장이고 그 자체로 유효 족보면 즉시 낸다 (막판 필승 패턴)
@@ -686,8 +695,11 @@ function aiFindPlay(hand, requiredCount, prevCombo){
     candidates = kCombos(hand,count).map(c=>({tiles:c, ev:evaluatePlay(c,count)}))
       .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
     // 트리플/포카드를 만들 수 있는 숫자를 쪼개 페어로 내기보다, 정확히 그 개수만큼만 있는
-    // (=더 상위 족보로 이어지지 않는) 조합을 우선한다.
-    candidates.sort((a,b)=> (groupSize(a.tiles[0].num)-groupSize(b.tiles[0].num)) || (a.ev.combo.strength-b.ev.combo.strength) );
+    // (=더 상위 족보로 이어지지 않는) 조합을 우선한다. 단, danger 상황에서는 조합 보존보다
+    // 확실한 견제가 우선이므로 강한 패부터 우선한다.
+    candidates.sort((a,b)=> dangerNow
+      ? (b.ev.combo.strength-a.ev.combo.strength)
+      : ((groupSize(a.tiles[0].num)-groupSize(b.tiles[0].num)) || (a.ev.combo.strength-b.ev.combo.strength)));
   } else if(count===5){
     candidates = kCombos(hand,5).map(c=>({tiles:c, ev:evaluatePlay(c,5)}))
       .filter(x=>x.ev.ok && beatsCombo(x.ev.combo, prevCombo));
@@ -696,9 +708,13 @@ function aiFindPlay(hand, requiredCount, prevCombo){
   }
   if(!candidates.length) return null;
   if(count===1){
-    // 싱글 따라내기는 "딱 이길 수 있는 가장 낮은 패로 이기고, 높은 싱글은 나중에 상대의 강한
-    // 패를 견제할 카드로 아껴둔다"는 정석이 이미 최선이라 몬테카를로 없이 그대로 따른다.
-    // (표본이 적은 몬테카를로는 오히려 이 정석을 뒤집는 잡음을 만들 수 있다.)
+    // 평소엔 "딱 이길 수 있는 가장 낮은 패로 이기고, 높은 싱글은 나중에 상대의 강한
+    // 패를 견제할 카드로 아껴둔다"가 정석이지만, 누군가 2장 이하로 남아 곧 끝낼 위험이
+    // 있을 땐 아껴둘 "나중"이 없을 수 있으므로 가장 높은 패로 확실히 견제한다.
+    if(dangerNow){
+      const strongest=candidates.slice().sort((a,b)=>b.ev.combo.strength-a.ev.combo.strength)[0];
+      return strongest.tiles;
+    }
     return candidates[0].tiles;
   }
   // 페어/트리플/5장 조합은 어떤 걸 깨서 내는 게 유리한지가 더 복잡하므로, 상위 후보 중
