@@ -1,0 +1,15 @@
+{
+  "name": "lexio-online-relay",
+  "version": "1.0.0",
+  "description": "렉시오(LEXIO) 온라인 방을 위한 최소 WebSocket 릴레이 서버 (Render 배포용)",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
