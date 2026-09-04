@@ -945,10 +945,11 @@ function connectOnline(nickname, roomCode, token, silentReconnect){
       }
     }
   }, 45000);
-  ws.onopen = ()=> ws.send(JSON.stringify({type:'join', nickname, room:(roomCode||'').replace(/\D/g,''), token: token||undefined}));
+  ws.onopen = ()=>{ console.log('[online] 웹소켓 open, join 메시지 전송'); ws.send(JSON.stringify({type:'join', nickname, room:(roomCode||'').replace(/\D/g,''), token: token||undefined})); };
   ws.onmessage = (ev)=>{
     let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
     if(m.type==='welcome'){
+      console.log('[online] welcome 수신, 연결 성공', m);
       clearTimeout(connectTimeout);
       onlineReconnectAttempt = 0;
       const wasMidGame = !!G;
@@ -995,14 +996,23 @@ function connectOnline(nickname, roomCode, token, silentReconnect){
       alert(m.message||'온라인 오류가 발생했습니다.'); onlineDisconnect();
     }
   };
-  ws.onclose = ()=>{
+  ws.onclose = (ev)=>{
     clearTimeout(connectTimeout);
     const was = online.connected;
     online.connected=false; online.ws=null;
     const el = document.getElementById('onlineTimer'); if(el) el.style.display='none';
-    if(was) scheduleOnlineReconnect();
+    console.warn('[online] 연결이 종료됨', {code: ev && ev.code, reason: ev && ev.reason, wasConnected: was, silentReconnect});
+    if(was || silentReconnect){
+      // 한 번이라도 연결됐었거나(끊김) / 조용한 재접속 시도 중이었다면 -> 자동 재시도
+      scheduleOnlineReconnect();
+    } else if(!silentReconnect){
+      // 첫 접속 시도 중 서버가 곧바로 연결을 끊은 경우: 45초 타임아웃을 기다리지 않고 바로 알림
+      alert('서버에 연결하지 못했습니다.\n(연결이 곧바로 끊어졌습니다. code='+(ev&&ev.code)+')\n주소: '+url+'\n\n· Render 서비스가 정상 배포/실행 중인지\n· 서버 로그에 에러가 없는지 확인해주세요.');
+      onlineDisconnect();
+      showSetupModal();
+    }
   };
-  ws.onerror = (e)=>{ console.error('온라인 서버 연결 오류', url, e); };
+  ws.onerror = (e)=>{ console.error('[online] 웹소켓 오류', url, e); };
 }
 function scheduleOnlineReconnect(){
   const room = online.room || (()=>{ try{ return localStorage.getItem('lexio_online_room')||''; }catch(e){ return ''; } })();
