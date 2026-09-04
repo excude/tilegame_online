@@ -836,6 +836,16 @@ function onlineUrl(){
   if(!/\/ws$/.test(url)) url += '/ws';
   return url;
 }
+// 웹소켓 접속(wss://.../ws) 전에, 같은 서버로 일반 HTTP(S) 요청을 미리 한 번 보내서
+// Render 무료 서버를 깨워둔다(마이티와 동일한 방식). 페이지에 들어오자마자 실행해두면,
+// 실제로 온라인 플레이 버튼을 누를 때쯤엔 서버가 이미 깨어있을 확률이 높아진다.
+// 실패해도 게임 진행에는 영향이 없으므로 에러는 조용히 무시한다.
+function wakeOnlineServer(){
+  try{
+    const httpUrl = onlineUrl().replace(/^ws/,'http').replace(/\/ws$/,'/');
+    fetch(httpUrl, {mode:'no-cors', cache:'no-store'}).catch(()=>{});
+  }catch(e){}
+}
 function onlineSend(o){ if(onlineEnabled()) online.ws.send(JSON.stringify(o)); }
 function onlineDisconnect(silent){
   if(onlineReconnectTimer){ clearTimeout(onlineReconnectTimer); onlineReconnectTimer=null; }
@@ -922,17 +932,19 @@ function connectOnline(nickname, roomCode, token, silentReconnect){
   online.ws = ws;
   if(online.uiTimerHandle) clearInterval(online.uiTimerHandle);
   online.uiTimerHandle = setInterval(onlineRenderTimer, 250);
-  if(!silentReconnect) openModal(`<h2>연결 중…</h2><p class="sub">${escHtml(url)} 에 접속하고 있습니다.</p>`);
+  if(!silentReconnect) openModal(`<h2>연결 중…</h2><p class="sub">${escHtml(url)} 에 접속하고 있습니다.<br>Render 무료 서버는 잠들어 있다가 첫 접속 시 깨어나는 데 최대 1분 가까이 걸릴 수 있어요. 잠시만 기다려주세요.</p>`);
+  // Render 무료 플랜은 서버가 잠들어 있으면 깨어나는 데 수십 초가 걸릴 수 있어서,
+  // 대기 시간을 8초 -> 45초로 늘려 그 사이에 접속이 실패했다고 잘못 판단하지 않도록 한다.
   const connectTimeout = setTimeout(()=>{
     if(!online.connected){
       if(silentReconnect){ scheduleOnlineReconnect(); }
       else{
-        alert('서버에 연결하지 못했습니다.\n주소: '+url+'\n\n· 주소가 wss:// 로 시작하는지\n· Render 서비스가 배포/실행 중인지(무료 플랜은 첫 접속 시 수십 초 걸릴 수 있음)\n확인해주세요.');
+        alert('서버에 연결하지 못했습니다.\n주소: '+url+'\n\n· 주소가 wss:// 로 시작하는지\n· Render 서비스가 배포/실행 중인지(무료 플랜은 첫 접속 시 최대 1분 가까이 걸릴 수 있음)\n확인해주세요.');
         onlineDisconnect();
         showSetupModal();
       }
     }
-  }, 8000);
+  }, 45000);
   ws.onopen = ()=> ws.send(JSON.stringify({type:'join', nickname, room:(roomCode||'').replace(/\D/g,''), token: token||undefined}));
   ws.onmessage = (ev)=>{
     let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
@@ -1706,6 +1718,7 @@ window.addEventListener('blur', flushSaveNow);
 
 /* ============================ 초기화 ============================ */
 (async function init(){
+  wakeOnlineServer(); // 페이지 진입 즉시 Render 서버 깨우기 시작 (마이티와 동일한 방식)
   loadSfxPref();
   await loadProfile();
   try{
