@@ -1,4 +1,4 @@
-<!-- LEXIO (렉시오) - Online Solo v0.017 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.018 (4인 고정: 나 + AI 3) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -46,8 +46,16 @@
   #topbar .brand .ver-tag{display:inline-block;color:#3a2a0a;background:var(--gold-bright);font-size:10px;font-family:'Noto Sans KR';font-weight:700;vertical-align:middle;margin-left:6px;padding:2px 6px;border-radius:8px;letter-spacing:0;}
   #topbar .brand span{color:var(--ivory);font-size:11px;display:block;font-family:'Noto Sans KR';opacity:.65;margin-top:-2px;}
   #roundTag{font-size:11px;padding:5px 10px;border:1px solid var(--gold);border-radius:20px;color:var(--gold-bright);background:#00000030;white-space:nowrap;}
+  #onlineTimer{font-size:11px;padding:5px 10px;border:1px solid #4fa8e888;border-radius:20px;color:#8ecfff;background:#00000030;white-space:nowrap;}
+  #onlineTimer.urgent{color:#ef9d7d;border-color:#ef9d7d88;}
   #newGameBtn{background:none;border:1px solid var(--line);color:var(--ivory);border-radius:20px;padding:5px 10px;font-size:11px;cursor:pointer;}
   #newGameBtn:active{background:#00000040;}
+
+  /* 온라인 방 UI */
+  .room-code{font-family:'Black Han Sans';font-size:32px;letter-spacing:6px;text-align:center;color:var(--gold-bright);background:#00000030;border:1px solid var(--gold);border-radius:12px;padding:12px 0;margin:10px 0;}
+  .online-player-row{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:13px;border-bottom:1px solid #ffffff12;}
+  .online-player-row .dot{width:8px;height:8px;border-radius:50%;background:#8ee0a8;flex:none;}
+  .online-hint{font-size:11px;color:var(--ivory);opacity:.6;text-align:center;margin-top:8px;}
 
   #statusStrip{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px;z-index:20;}
   .status-badge{font-size:11px;padding:5px 10px;border-radius:20px;background:#00000045;border:1px solid #c99a4a55;color:var(--ivory);white-space:nowrap;}
@@ -254,8 +262,9 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.017</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.018</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
+    <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
     <button id="ruleBtn" title="규칙 보기">?</button>
     <button id="newGameBtn">새 매치</button>
@@ -765,19 +774,21 @@ function applyXpGain(gain){
 }
 // 이번 라운드 결과(roundScores)를 이 기기의 영구 프로필(레벨/XP)에 반영한다.
 function applyRoundResultToProfile(roundScores){
+  const my = meId();
   const order=[0,1,2,3].slice().sort((a,b)=>roundScores[b]-roundScores[a]);
-  const rank = order.indexOf(0);
+  const rank = order.indexOf(my);
   profile.totalRounds += 1;
   if(rank===0) profile.totalRoundWins += 1;
-  const {xp:xpGain, breakdown} = computeRoundXpGain(rank, roundScores[0], roundScores);
+  const {xp:xpGain, breakdown} = computeRoundXpGain(rank, roundScores[my], roundScores);
   const {startLevel, startXp, levelUps, levelDowns} = applyXpGain(xpGain);
   saveProfile();
   return {rank, xpGain, breakdown, startLevel, startXp, levelUps, levelDowns, streak:profile.currentStreak};
 }
 // 매치 전체가 끝났을 때(최종 순위) 누적 전적만 별도로 기록한다. (XP는 이미 라운드마다 정산됨)
 function applyMatchResultToProfile(){
+  const my = meId();
   const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
-  const rank = order.indexOf(0);
+  const rank = order.indexOf(my);
   profile.totalGames += 1;
   if(rank===0) profile.totalWins += 1;
   saveProfile();
@@ -790,6 +801,323 @@ let matchState = { round:1, totalRounds:TOTAL_ROUNDS, endMode:'rounds', startSco
 let selection = new Set();
 let feedbackTimer = null;
 let lastRenderedComboKey = null;
+
+/* ============================ 온라인 멀티플레이 (WebSocket, Render 서버) ============================
+   host(방장)의 브라우저가 게임 로직을 전부 실행하는 권위서버(host-authoritative) 방식입니다.
+   Render에 배포한 릴레이 서버는 메시지를 그대로 전달만 하고, 실제 규칙 판정은 host 클라이언트가 합니다.
+   - host: 타일 내기/패스 등 모든 상태 변화를 직접 계산 → 매 render()마다 전체 상태를 방 전체에 broadcast
+   - guest: 자기 턴에는 UI로 입력만 받고, 그 입력을 host에게 "action" 메시지로 보낸 뒤 host가 계산한
+     결과(state)를 받아 그대로 반영. 이렇게 하면 클라이언트마다 게임 로직이 따로 진행되어 턴이
+     어긋나는 문제가 발생하지 않습니다. (마이티 온라인과 동일한 구조)
+*/
+// ⚠️ Render에 서버를 배포한 뒤, 아래 주소를 실제 서비스 주소로 바꿔주세요. (예: wss://lexio-online.onrender.com)
+const ONLINE_SERVER_URL = "wss://lexio-online-relay.onrender.com";
+const ONLINE_LIMIT_MS = 25000;
+const online = {ws:null, connected:false, host:false, room:"", playerId:null, nickname:"", token:"", players:[], deadline:0, timerHandle:null, uiTimerHandle:null, starting:false};
+let onlineReconnectAttempt = 0;
+let onlineReconnectTimer = null;
+// 온라인 방장이 로비에서 고르는 매치 설정. 로비가 재렌더링(인원 변경 등)되어도 방장이 고른 값이
+// 초기화되지 않도록 모듈 스코프에 별도로 보관해둔다.
+const onlineLobbySettings = {endMode:'rounds', totalRounds:TOTAL_ROUNDS, startScore:50};
+
+function onlineEnabled(){ return !!(online.connected && online.ws && online.ws.readyState===WebSocket.OPEN); }
+// 온라인 모드일 땐 서버가 배정해준 내 물리적 자리 번호, 솔로 모드일 땐 항상 0(나)
+function meId(){ return onlineEnabled() ? online.playerId : 0; }
+// 화면상 내 자리가 항상 하단(슬롯 0)에 오도록, 물리적 자리 번호(absId)를 화면 슬롯 번호로 회전시킨다.
+// 슬롯: 0=하단(나) · 1=상단 · 2=우측 · 3=좌측 (TURN_ORDER의 시계방향 배치는 그대로 유지된다)
+function seatSlot(absId){ return (absId - meId() + N_PLAYERS) % N_PLAYERS; }
+function slotToAbs(slot){ return (slot + meId()) % N_PLAYERS; }
+function escHtml(s){ return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function onlineUrl(){
+  let url = ONLINE_SERVER_URL;
+  try{ const saved = localStorage.getItem('lexio_online_server'); if(saved) url = saved; }catch(e){}
+  url = url.trim().replace(/\/+$/,'');
+  if(!/\/ws$/.test(url)) url += '/ws';
+  return url;
+}
+function onlineSend(o){ if(onlineEnabled()) online.ws.send(JSON.stringify(o)); }
+function onlineDisconnect(silent){
+  if(onlineReconnectTimer){ clearTimeout(onlineReconnectTimer); onlineReconnectTimer=null; }
+  onlineReconnectAttempt = 0;
+  if(online.timerHandle){ clearInterval(online.timerHandle); online.timerHandle=null; }
+  if(online.ws){ try{ online.ws.onclose=null; online.ws.close(); }catch(e){} }
+  online.ws=null; online.connected=false; online.host=false; online.playerId=null; online.players=[]; online.room=''; online.token='';
+  if(online.uiTimerHandle){ clearInterval(online.uiTimerHandle); online.uiTimerHandle=null; }
+  const el = document.getElementById('onlineTimer');
+  if(el) el.style.display='none';
+  if(!silent){ try{ localStorage.removeItem('lexio_online_room'); localStorage.removeItem('lexio_online_token'); }catch(e){} }
+}
+// host만 턴 제한 시간을 발급/집행한다: 제한시간 안에 행동이 없으면(연결이 끊긴 자리 등)
+// host가 대신 추천 조합을 내거나 패스를 실행해 게임이 멈추지 않게 한다.
+function onlineArmTimer(){
+  if(!online.host || !G || G.finished) return;
+  online.deadline = Date.now() + ONLINE_LIMIT_MS;
+  onlineSend({type:'timer', deadline:online.deadline});
+  if(online.timerHandle) clearInterval(online.timerHandle);
+  const pid = G.turn;
+  online.timerHandle = setInterval(()=>{
+    if(!online.host || !G || G.finished || G.turn!==pid || Date.now()<online.deadline) return;
+    clearInterval(online.timerHandle); online.timerHandle=null; online.deadline=0;
+    const p = G.players[pid];
+    const tiles = aiFindPlay(p.hand, G.requiredCount, G.lastCombo);
+    if(tiles) doPlay(pid, tiles, true); else doPass(pid, true);
+  }, 250);
+}
+function onlineRenderTimer(){
+  const el = document.getElementById('onlineTimer');
+  if(!el) return;
+  if(!onlineEnabled() || !G || G.finished || !online.deadline){ if(el) el.style.display='none'; return; }
+  const sec = Math.ceil(Math.max(0, online.deadline-Date.now())/1000);
+  el.textContent = `⏱ ${G.players[G.turn]?.name||'플레이어'} 차례 · ${sec}초`;
+  el.classList.toggle('urgent', sec<=5);
+  el.style.display='block';
+}
+function broadcastOnlineState(){
+  if(online.host && onlineEnabled() && G){
+    onlineSend({type:'state', state:{G:serializeG(G), matchState, deadline:online.deadline}});
+  }
+}
+function serializeG(g){ return g ? {...g} : null; } // G는 순수 데이터(Set/Map 없음)라 그대로 복사하면 된다
+function deserializeG(obj){ return obj ? {...obj} : null; }
+// host가 guest로부터 받은 행동(action)을 검증 후 실제 게임 로직에 반영
+function handleOnlineAction(action, pid){
+  if(!G || !action || G.finished) return;
+  if(action.type==='play' && G.turn===pid){
+    const tiles = (action.tileIds||[]).map(id=>G.players[pid].hand.find(t=>tileId(t)===id)).filter(Boolean);
+    if(tiles.length===(action.tileIds||[]).length) doPlay(pid, tiles, true);
+  } else if(action.type==='pass' && G.turn===pid){
+    doPass(pid, true);
+  }
+}
+let guestLastResultKey = null;
+// 게스트 화면에서, host가 보낸 새 상태에 맞춰 결과 모달을 열거나 닫는다(host의 결과 화면과 동기화).
+function guestSyncModalForState(){
+  if(!G || online.host) return;
+  if(G.finished){
+    let key;
+    if(matchState.matchOver) key = 'final:'+matchState.round;
+    else {
+      const last = matchState.history[matchState.history.length-1];
+      if(!last) return;
+      key = 'round:'+matchState.round+':'+last.winnerIdx;
+    }
+    if(guestLastResultKey!==key){
+      guestLastResultKey = key;
+      if(matchState.matchOver) showFinalResultModal();
+      else { const last=matchState.history[matchState.history.length-1]; showRoundResultModal(last.roundScores, last.counts, last.winnerIdx, last.transfers, last.isLastRound); }
+    }
+  } else if(guestLastResultKey!==null){
+    guestLastResultKey = null;
+    closeModal();
+  }
+}
+function connectOnline(nickname, roomCode, token, silentReconnect){
+  onlineDisconnect(true);
+  online.nickname = nickname;
+  try{ localStorage.setItem('lexio_online_nickname', nickname); }catch(e){}
+  const url = onlineUrl();
+  let ws;
+  try{ ws = new WebSocket(url); }catch(e){ if(!silentReconnect) alert('온라인 서버 주소가 올바르지 않습니다: '+url); return; }
+  online.ws = ws;
+  if(online.uiTimerHandle) clearInterval(online.uiTimerHandle);
+  online.uiTimerHandle = setInterval(onlineRenderTimer, 250);
+  if(!silentReconnect) openModal(`<h2>연결 중…</h2><p class="sub">${escHtml(url)} 에 접속하고 있습니다.</p>`);
+  const connectTimeout = setTimeout(()=>{
+    if(!online.connected){
+      if(silentReconnect){ scheduleOnlineReconnect(); }
+      else{
+        alert('서버에 연결하지 못했습니다.\n주소: '+url+'\n\n· 주소가 wss:// 로 시작하는지\n· Render 서비스가 배포/실행 중인지(무료 플랜은 첫 접속 시 수십 초 걸릴 수 있음)\n확인해주세요.');
+        onlineDisconnect();
+        showSetupModal();
+      }
+    }
+  }, 8000);
+  ws.onopen = ()=> ws.send(JSON.stringify({type:'join', nickname, room:(roomCode||'').replace(/\D/g,''), token: token||undefined}));
+  ws.onmessage = (ev)=>{
+    let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
+    if(m.type==='welcome'){
+      clearTimeout(connectTimeout);
+      onlineReconnectAttempt = 0;
+      const wasMidGame = !!G;
+      online.connected=true; online.playerId=m.playerId; online.host=!!m.host; online.room=m.room; online.players=m.players||[];
+      if(m.token) online.token=m.token;
+      try{ localStorage.setItem('lexio_online_room', online.room); localStorage.setItem('lexio_online_token', online.token||''); }catch(e){}
+      if(silentReconnect && wasMidGame){
+        closeModal();
+        if(online.host) broadcastOnlineState();
+        render();
+      } else {
+        renderOnlineLobby();
+      }
+    } else if(m.type==='lobby'){
+      online.players = m.players||[];
+      const me = online.players.find(p=>p.id===online.playerId);
+      online.host = !!(me && me.host);
+      renderOnlineLobby();
+    } else if(m.type==='action' && online.host){
+      handleOnlineAction(m.action, m.playerId);
+    } else if(m.type==='state'){
+      if(online.host) return; // host는 자기 자신이 보낸 broadcast를 되돌려받아도 다시 처리하지 않는다(무한루프 방지)
+      if(m.state && m.state.G){
+        G = deserializeG(m.state.G);
+        Object.assign(matchState, m.state.matchState||{});
+        if(matchState.endMode==='bust' && (matchState.totalRounds===null||matchState.totalRounds===undefined)) matchState.totalRounds=Infinity;
+        online.deadline = m.state.deadline||0;
+        selection.clear();
+        render();
+        guestSyncModalForState();
+      }
+    } else if(m.type==='timer'){
+      online.deadline = m.deadline||0; onlineRenderTimer();
+    } else if(m.type==='peer_away'){
+      showFeedback(`⏸️ ${m.name||'플레이어'}님의 연결이 잠시 끊겼습니다. 10초 안에 안 돌아오면 게임이 종료됩니다.`);
+    } else if(m.type==='peer_back'){
+      showFeedback(`▶️ ${m.name||'플레이어'}님이 다시 접속했습니다.`);
+      if(online.host) broadcastOnlineState();
+    } else if(m.type==='room_closed'){
+      alert(`⚠️ ${m.name||'플레이어'}님이 10초 안에 다시 접속하지 못해 게임이 종료되었습니다.`);
+      onlineDisconnect();
+      showSetupModal();
+    } else if(m.type==='error'){
+      alert(m.message||'온라인 오류가 발생했습니다.'); onlineDisconnect();
+    }
+  };
+  ws.onclose = ()=>{
+    clearTimeout(connectTimeout);
+    const was = online.connected;
+    online.connected=false; online.ws=null;
+    const el = document.getElementById('onlineTimer'); if(el) el.style.display='none';
+    if(was) scheduleOnlineReconnect();
+  };
+  ws.onerror = (e)=>{ console.error('온라인 서버 연결 오류', url, e); };
+}
+function scheduleOnlineReconnect(){
+  const room = online.room || (()=>{ try{ return localStorage.getItem('lexio_online_room')||''; }catch(e){ return ''; } })();
+  const token = online.token || (()=>{ try{ return localStorage.getItem('lexio_online_token')||''; }catch(e){ return ''; } })();
+  const nickname = online.nickname || (()=>{ try{ return localStorage.getItem('lexio_online_nickname')||''; }catch(e){ return ''; } })();
+  if(!room || !token || !nickname){ onlineDisconnect(); showSetupModal(); return; }
+  onlineReconnectAttempt++;
+  if(onlineReconnectAttempt > 6){
+    onlineReconnectAttempt = 0;
+    alert('온라인 방에 다시 연결하지 못했습니다.');
+    onlineDisconnect();
+    showSetupModal();
+    return;
+  }
+  if(onlineReconnectTimer) clearTimeout(onlineReconnectTimer);
+  onlineReconnectTimer = setTimeout(()=>{
+    onlineReconnectTimer = null;
+    connectOnline(nickname, room, token, true);
+  }, Math.min(1500*onlineReconnectAttempt, 6000));
+}
+function renderOnlineLobby(){
+  if(!online.connected) return;
+  const rows = online.players.map(p=>`<div class="online-player-row"><span class="dot"></span><span>${escHtml(p.name)}${p.connected===false?' <span style="opacity:.6;font-size:11px;">(대기중)</span>':''}</span><span style="margin-left:auto;opacity:.55">${p.host?'방장':'플레이어'}</span></div>`).join('');
+  const settingsHtml = online.host ? `
+    <p class="sub" style="margin-top:10px;">진행 방식</p>
+    <div class="row" id="onlineEndModeRow">
+      <div class="suit-opt${onlineLobbySettings.endMode==='rounds'?' sel':''}" data-mode="rounds" style="font-size:13px;">📅 라운드제</div>
+      <div class="suit-opt${onlineLobbySettings.endMode==='bust'?' sel':''}" data-mode="bust" style="font-size:13px;">💯 점수제</div>
+    </div>
+    <div id="onlineRoundCountSection" style="display:${onlineLobbySettings.endMode==='rounds'?'':'none'};">
+      <p class="sub">총 라운드 수</p>
+      <div class="row" id="onlineRoundRow">${ROUND_PRESETS.map(n=>`<div class="suit-opt${n===onlineLobbySettings.totalRounds?' sel':''}" data-n="${n}" style="font-size:13px;">${n}판</div>`).join('')}</div>
+    </div>
+    <div id="onlineStartScoreSection" style="display:${onlineLobbySettings.endMode==='bust'?'':'none'};">
+      <p class="sub">시작 점수 (보통 50점)</p>
+      <div class="row"><input type="number" id="onlineStartScoreInput" value="${onlineLobbySettings.startScore}" min="10" max="999" style="flex:1;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#0000002a;color:var(--ivory);font-size:14px;"></div>
+    </div>
+  ` : `
+    <p class="online-hint" style="margin-top:10px;">${onlineLobbySettings.endMode==='bust'? '점수제 · 시작 '+onlineLobbySettings.startScore+'점' : '라운드제 · '+onlineLobbySettings.totalRounds+'판'}</p>
+  `;
+  openModal(`
+    <h2>온라인 방</h2>
+    <p class="sub">친구에게 아래 방 코드를 알려주세요. (최대 4명, 부족한 자리는 AI로 채워집니다)</p>
+    <div class="room-code">${escHtml(online.room)}</div>
+    ${rows}
+    ${settingsHtml}
+    <p class="online-hint">${online.host? '설정을 정하고 인원이 모이면 게임 시작을 눌러주세요.' : '방장이 게임을 시작하면 자동으로 화면이 전환됩니다.'}</p>
+    <div class="modal-actions">
+      ${online.host? `<button class="btn" id="onlineStartBtn">게임 시작</button>` : ``}
+      <button class="btn ghost" id="onlineLeaveBtn">나가기</button>
+    </div>
+  `);
+  const leaveBtn = document.getElementById('onlineLeaveBtn');
+  if(leaveBtn) leaveBtn.onclick = ()=>{ closeModal(); onlineDisconnect(); showSetupModal(); };
+  const startBtn = document.getElementById('onlineStartBtn');
+  if(startBtn) startBtn.onclick = ()=>{ closeModal(); startOnlineGame(); };
+  if(!online.host) return;
+  const startScoreInput = document.getElementById('onlineStartScoreInput');
+  if(startScoreInput) startScoreInput.addEventListener('input', (e)=>{
+    const v = parseInt(e.target.value,10);
+    onlineLobbySettings.startScore = isNaN(v) ? 50 : v;
+  });
+  document.querySelectorAll('#onlineRoundRow .suit-opt').forEach(el=>{
+    el.onclick = ()=>{
+      document.querySelectorAll('#onlineRoundRow .suit-opt').forEach(x=>x.classList.remove('sel'));
+      el.classList.add('sel');
+      onlineLobbySettings.totalRounds = parseInt(el.dataset.n,10);
+    };
+  });
+  document.querySelectorAll('#onlineEndModeRow .suit-opt').forEach(el=>{
+    el.onclick = ()=>{
+      document.querySelectorAll('#onlineEndModeRow .suit-opt').forEach(x=>x.classList.remove('sel'));
+      el.classList.add('sel');
+      onlineLobbySettings.endMode = el.dataset.mode;
+      const sec = document.getElementById('onlineRoundCountSection');
+      if(sec) sec.style.display = onlineLobbySettings.endMode==='rounds' ? '' : 'none';
+      const sec2 = document.getElementById('onlineStartScoreSection');
+      if(sec2) sec2.style.display = onlineLobbySettings.endMode==='bust' ? '' : 'none';
+    };
+  });
+}
+function showOnlineEntry(){
+  let saved=''; try{ saved = localStorage.getItem('lexio_online_nickname')||''; }catch(e){}
+  openModal(`
+    <h2>온라인 플레이</h2>
+    <p class="sub">닉네임을 입력하세요. 방 코드를 비우면 새 방을 만듭니다.</p>
+    <div class="row"><input id="onlineNick" maxlength="12" value="${escHtml(saved)}" placeholder="닉네임" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);background:#0000002a;color:var(--ivory);font-size:14px"></div>
+    <div class="row"><input id="onlineRoom" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="방 코드 (숫자, 선택)" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);background:#0000002a;color:var(--ivory);font-size:14px;"></div>
+    <p class="online-hint">서버: ${escHtml(onlineUrl())}</p>
+    <div class="modal-actions"><button class="btn ghost" id="onlineCancel">취소</button><button class="btn" id="onlineJoin">입장</button></div>
+  `);
+  document.getElementById('onlineCancel').onclick = ()=>showSetupModal();
+  const roomInputEl = document.getElementById('onlineRoom');
+  roomInputEl.addEventListener('input', ()=>{
+    const digitsOnly = roomInputEl.value.replace(/\D/g,'').slice(0,6);
+    if(roomInputEl.value !== digitsOnly) roomInputEl.value = digitsOnly;
+  });
+  document.getElementById('onlineJoin').onclick = ()=>{
+    const n = document.getElementById('onlineNick').value.trim().slice(0,12);
+    const r = document.getElementById('onlineRoom').value.trim().replace(/\D/g,'');
+    if(!n){ alert('닉네임을 입력하세요.'); return; }
+    closeModal();
+    connectOnline(n, r);
+  };
+}
+function buildRoster(){
+  if(onlineEnabled()){
+    const takenNames = new Set(online.players.map(p=>p.name));
+    const aiPool = [1,2,3].map(i=>AI_NAMES[i]).filter(n=>!takenNames.has(n));
+    let ai=0;
+    const nextAiName = ()=> aiPool[ai++ % aiPool.length] || 'AI';
+    return [0,1,2,3].map(i=>{
+      const q = online.players.find(p=>p.id===i);
+      return q ? {name:q.name, isHuman:true} : {name:nextAiName(), isHuman:false};
+    });
+  }
+  return [0,1,2,3].map(i=>({name:i===0?'나':AI_NAMES[i], isHuman:i===0}));
+}
+function startOnlineGame(){
+  if(!online.host || online.starting) return;
+  online.starting = true;
+  const settings = onlineLobbySettings.endMode==='bust'
+    ? {endMode:'bust', startScore:Math.max(10,Math.min(999, onlineLobbySettings.startScore||50))}
+    : {endMode:'rounds', totalRounds:onlineLobbySettings.totalRounds||TOTAL_ROUNDS};
+  startMatch(settings);
+  online.starting = false;
+}
 
 function addLog(msg){ G.log.push(msg); }
 
@@ -819,8 +1147,9 @@ function startRound(){
   hands.forEach(applyCurrentHandSort);
   let leader = hands.findIndex(h=>h.some(t=>t.suit==='cloud' && t.num===3));
   if(leader<0) leader=0;
+  const roster = buildRoster();
   G = {
-    players:[0,1,2,3].map(i=>({idx:i, name:i===0?'나':AI_NAMES[i], isHuman:i===0, hand:hands[i]})),
+    players:[0,1,2,3].map(i=>({idx:i, name:roster[i].name, isHuman:roster[i].isHuman, hand:hands[i]})),
     leader, turn:leader, lastCombo:null, requiredCount:null, passCount:0,
     log:[], finished:false, winner:null,
   };
@@ -838,11 +1167,15 @@ function advanceTurn(){
   G.turn = TURN_ORDER[(pos+1)%TURN_ORDER.length];
 }
 
-function doPlay(playerIdx, tiles){
+function doPlay(playerIdx, tiles, fromHost){
+  if(onlineEnabled() && !online.host && !fromHost){
+    onlineSend({type:'action', action:{type:'play', tileIds:tiles.map(tileId)}, playerId:meId()});
+    return false;
+  }
   const ev=evaluatePlay(tiles, G.requiredCount);
-  if(!ev.ok){ if(playerIdx===0) showFeedback(ev.reason); return false; }
+  if(!ev.ok){ if(playerIdx===meId()) showFeedback(ev.reason); return false; }
   if(G.requiredCount!=null && !beatsCombo(ev.combo, G.lastCombo)){
-    if(playerIdx===0) showFeedback('이전 조합보다 높은 조합을 내야 합니다.');
+    if(playerIdx===meId()) showFeedback('이전 조합보다 높은 조합을 내야 합니다.');
     return false;
   }
   const p=G.players[playerIdx];
@@ -862,9 +1195,13 @@ function doPlay(playerIdx, tiles){
   queueSave();
   return true;
 }
-function doPass(playerIdx){
+function doPass(playerIdx, fromHost){
+  if(onlineEnabled() && !online.host && !fromHost){
+    onlineSend({type:'action', action:{type:'pass'}, playerId:meId()});
+    return false;
+  }
   if(G.requiredCount==null){
-    if(playerIdx===0) showFeedback('선(先)은 패스할 수 없습니다. 조합을 내주세요.');
+    if(playerIdx===meId()) showFeedback('선(先)은 패스할 수 없습니다. 조합을 내주세요.');
     return false;
   }
   addLog(`${G.players[playerIdx].name}: 패스`);
@@ -885,13 +1222,16 @@ function doPass(playerIdx){
 }
 function scheduleTurnIfAI(){
   if(!G || G.finished) return;
+  if(onlineEnabled() && !online.host) return; // 온라인 모드에서는 host만 AI/타이머를 진행시킨다
   const p=G.players[G.turn];
   if(!p.isHuman){
     setTimeout(()=>{
       if(!G || G.finished || G.turn!==p.idx) return;
       const tiles=aiFindPlay(p.hand, G.requiredCount, G.lastCombo);
-      if(tiles) doPlay(p.idx, tiles); else doPass(p.idx);
+      if(tiles) doPlay(p.idx, tiles, true); else doPass(p.idx, true);
     }, 600+Math.random()*550);
+  } else if(onlineEnabled()){
+    onlineArmTimer(); // 온라인 사람 차례엔 응답이 없을 경우를 대비해 host가 제한시간을 건다
   }
 }
 // 남은 타일 수 차이를 기준으로 누가 누구에게 얼마를 주고받는지 1:1로 전부 정산한다.
@@ -964,21 +1304,23 @@ function render(){
   // status strip
   const strip=document.getElementById('statusStrip');
   strip.innerHTML='';
-  const meScore=matchState.scores[0];
+  const meScore=matchState.scores[meId()];
   strip.appendChild(badgeEl(`Lv.${profile.level} · ${Math.round(profile.xp)}/${xpToNextLevel(profile.level)}xp`, 'lvl'));
   strip.appendChild(badgeEl(`내 점수 ${meScore}`, 'me'));
   strip.appendChild(badgeEl(`선: ${G.players[G.leader].name}`, 'leader'));
   strip.appendChild(badgeEl(`요구: ${G.requiredCount==null?'자유':G.requiredCount+'장'}`, 'turn'));
 
-  // seats (AI 1,2,3)
+  // seats (내 자리를 제외한 나머지 3명 — 화면상 항상 같은 위치(상/우/좌)에 보이도록
+  // 물리적 자리 번호를 화면 슬롯 번호로 회전시켜서 배치한다)
   const seatsWrap=document.getElementById('seats');
   seatsWrap.innerHTML='';
-  [1,2,3].forEach(i=>{
+  [1,2,3].forEach(slot=>{
+    const i = slotToAbs(slot);
     const p=G.players[i];
     const justPlayed = isNewCombo && G.lastCombo && G.lastCombo.owner===i;
     const seat=document.createElement('div');
     seat.className='seat'+(G.turn===i?' turn':'')+(justPlayed?' playing':'');
-    seat.style.left=SEAT_POS[i].left; seat.style.top=SEAT_POS[i].top;
+    seat.style.left=SEAT_POS[slot].left; seat.style.top=SEAT_POS[slot].top;
     seat.innerHTML=`
       <div class="avatar">${p.name}${G.leader===i?'<div class="leader-badge">선</div>':''}</div>
       <div class="name">${p.name} <span class="seatScore ${matchState.scores[i]>=0?'pos':'neg'}">${matchState.scores[i]}</span></div>
@@ -996,7 +1338,7 @@ function render(){
     labelEl.textContent = G.finished
       ? `라운드 종료 · ${G.players[G.winner].name} 승리`
       : `${G.players[G.lastCombo.owner].name} · ${describeCombo(G.lastCombo)}`;
-    const from = FLY_FROM[G.lastCombo.owner] || FLY_FROM[0];
+    const from = FLY_FROM[seatSlot(G.lastCombo.owner)] || FLY_FROM[0];
     G.lastCombo.tiles.forEach((t,i)=>{
       const el=tileEl(t,'tile');
       if(isNewCombo){
@@ -1009,18 +1351,20 @@ function render(){
       tilesEl.appendChild(el);
     });
   }
-  document.getElementById('turnFlash').textContent = G.finished ? '' : (G.players[G.turn].isHuman ? '내 차례입니다' : `${G.players[G.turn].name} 차례`);
+  document.getElementById('turnFlash').textContent = G.finished ? '' : (G.turn===meId() ? '내 차례입니다' : `${G.players[G.turn].name} 차례`);
 
   autoSelectRecommendedForMyTurn();
   renderLog();
   renderHand();
   updateActionState();
+  onlineRenderTimer();
+  if(online.host) broadcastOnlineState();
 }
 // 내 차례가 되면 "추천" 버튼을 누른 것처럼 추천 조합을 기본으로 선택해둔다.
 function autoSelectRecommendedForMyTurn(){
-  if(!G || G.finished || G.turn!==0) return;
+  if(!G || G.finished || G.turn!==meId()) return;
   if(selection.size>0) return;
-  const me=G.players[0];
+  const me=G.players[meId()];
   const tiles=aiFindPlay(me.hand, G.requiredCount, G.lastCombo);
   if(tiles) selection = new Set(tiles.map(tileId));
 }
@@ -1034,12 +1378,12 @@ function renderLog(){
 function renderHand(){
   const wrap=document.getElementById('myHand');
   wrap.innerHTML='';
-  const me=G.players[0];
+  const me=G.players[meId()];
   me.hand.forEach(t=>{
     const el=tileEl(t,'htile');
     if(selection.has(tileId(t))) el.classList.add('selected');
     el.addEventListener('click', ()=>{
-      if(G.finished || G.turn!==0) return;
+      if(G.finished || G.turn!==meId()) return;
       const id=tileId(t);
       if(selection.has(id)) selection.delete(id); else selection.add(id);
       renderHand(); updateActionState();
@@ -1052,7 +1396,7 @@ function updateActionState(){
   const passBtn=document.getElementById('passBtn');
   const recBtn=document.getElementById('recommendBtn');
   const sortBtn=document.getElementById('sortBtn');
-  const myTurn = G && !G.finished && G.turn===0;
+  const myTurn = G && !G.finished && G.turn===meId();
   playBtn.disabled = !myTurn || selection.size===0;
   passBtn.disabled = !myTurn || G.requiredCount==null;
   recBtn.disabled = !myTurn;
@@ -1068,25 +1412,25 @@ function showFeedback(msg){
 
 /* ============================ 액션 버튼 ============================ */
 document.getElementById('playBtn').addEventListener('click', ()=>{
-  if(!G || G.turn!==0) return;
-  const me=G.players[0];
+  if(!G || G.turn!==meId()) return;
+  const me=G.players[meId()];
   const tiles = me.hand.filter(t=>selection.has(tileId(t)));
-  doPlay(0, tiles);
+  doPlay(meId(), tiles);
 });
 document.getElementById('passBtn').addEventListener('click', ()=>{
-  if(!G || G.turn!==0) return;
-  doPass(0);
+  if(!G || G.turn!==meId()) return;
+  doPass(meId());
 });
 document.getElementById('sortBtn').addEventListener('click', ()=>{
   if(!G || G.finished) return;
   handSortMode = handSortMode==='number' ? 'suit' : 'number';
-  applyCurrentHandSort(G.players[0].hand);
+  applyCurrentHandSort(G.players[meId()].hand);
   renderHand();
   updateActionState();
 });
 document.getElementById('recommendBtn').addEventListener('click', ()=>{
-  if(!G || G.turn!==0) return;
-  const me=G.players[0];
+  if(!G || G.turn!==meId()) return;
+  const me=G.players[meId()];
   const tiles=aiFindPlay(me.hand, G.requiredCount, G.lastCombo);
   if(!tiles){ showFeedback(G.requiredCount==null ? '추천할 조합이 없습니다.' : '낼 수 있는 조합이 없습니다. 패스하세요.'); return; }
   selection = new Set(tiles.map(tileId));
@@ -1120,7 +1464,7 @@ function confirmNewGame(){
   openModal(`<h2>새 매치</h2><p class="sub" style="text-align:center;">진행 중인 매치를 종료하고 새로 시작하시겠습니까?</p>
     <div class="modal-actions"><button class="btn ghost" id="cancelNG">아니오</button><button class="btn" id="confirmNG">예</button></div>`);
   document.getElementById('cancelNG').onclick=closeModal;
-  document.getElementById('confirmNG').onclick=async ()=>{ await clearSavedGame(); showSetupModal(); };
+  document.getElementById('confirmNG').onclick=async ()=>{ onlineDisconnect(); await clearSavedGame(); showSetupModal(); };
 }
 function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound){
   if(transfers===undefined){
@@ -1142,6 +1486,9 @@ function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastR
     <div class="settle-row"><span>${G.players[t.from].name} → ${G.players[t.to].name}</span><span class="amt">-${t.amount}</span></div>`).join('');
   const bustHint = matchState.endMode==='bust' && isLastRound
     ? `<p class="sub" style="text-align:center;color:#ef9d7d;">0점 이하가 된 플레이어가 있어 매치가 종료됩니다.</p>` : '';
+  // 온라인 모드에서는 다음 라운드로 넘기는 건 host만 할 수 있고, 게스트는 "확인"만 눌러
+  // 자기 화면에서 레벨/경험치 정산을 보고 host의 다음 라운드 시작을 기다린다.
+  const canAdvance = !onlineEnabled() || online.host;
   openModal(`<h2>${matchState.round}라운드 결과</h2>
     ${rows}
     <div class="settle-title">정산 내역</div>
@@ -1149,14 +1496,19 @@ function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastR
     ${bustHint}
     <div class="modal-actions">
       <button class="btn ghost" id="roundLogBtn">📜 로그</button>
-      <button class="btn" id="roundNextBtn">${isLastRound?'최종 결과 보기':'다음 라운드'}</button>
+      ${canAdvance
+        ? `<button class="btn" id="roundNextBtn">${isLastRound?'최종 결과 보기':'다음 라운드'}</button>`
+        : `<button class="btn" id="roundAckBtn">확인</button>`}
     </div>`);
-  document.getElementById('roundNextBtn').onclick=()=>{
+  const nextBtn=document.getElementById('roundNextBtn');
+  if(nextBtn) nextBtn.onclick=()=>{
     showRoundXpModal(()=>{
       if(isLastRound){ showFinalResultModal(); }
       else { closeModal(); matchState.round++; startRound(); }
     });
   };
+  const ackBtn=document.getElementById('roundAckBtn');
+  if(ackBtn) ackBtn.onclick=()=>{ showRoundXpModal(()=>{ closeModal(); }); };
   document.getElementById('roundLogBtn').onclick=()=>{
     openLogModal(()=>showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound));
   };
@@ -1249,7 +1601,7 @@ function showFinalResultModal(){
     matchState.finalApplied=true;
     queueSave();
     const order0=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
-    sfxPlay(order0.indexOf(0)===0 ? 'win' : 'lose');
+    sfxPlay(order0.indexOf(meId())===0 ? 'win' : 'lose');
   }
   const order=[0,1,2,3].slice().sort((a,b)=>matchState.scores[b]-matchState.scores[a]);
   const medals=['🥇','🥈','🥉','4위'];
@@ -1262,9 +1614,9 @@ function showFinalResultModal(){
     <p class="sub" style="text-align:center;margin-top:10px;">경험치는 라운드마다 정산되었습니다 · 현재 Lv.${profile.level}</p>
     <div class="modal-actions">
       <button class="btn ghost" id="finalLogBtn">📜 로그</button>
-      <button class="btn" id="finalNewBtn">새 매치 시작</button>
+      <button class="btn" id="finalNewBtn">${onlineEnabled()?'방 나가기':'새 매치 시작'}</button>
     </div>`);
-  document.getElementById('finalNewBtn').onclick=async ()=>{ await clearSavedGame(); showSetupModal(); };
+  document.getElementById('finalNewBtn').onclick=async ()=>{ onlineDisconnect(); await clearSavedGame(); showSetupModal(); };
   document.getElementById('finalLogBtn').onclick=()=>{ openLogModal(()=>showFinalResultModal()); };
 }
 const RULE_TEXT = `
@@ -1316,7 +1668,8 @@ function renderSetupModal(){
         style="flex:1;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#0000002a;color:var(--ivory);font-size:14px;"></div>
       <p class="sub">누구든 점수가 0점 이하가 되면 그 라운드를 끝으로 매치가 종료됩니다.</p>
     </div>
-    <div class="modal-actions"><button class="btn" id="setupStartBtn">게임 시작</button></div>`);
+    <div class="modal-actions"><button class="btn" id="setupStartBtn">게임 시작</button></div>
+    <div class="modal-actions" style="margin-top:6px;"><button class="btn ghost" id="setupOnlineBtn">🌐 온라인으로 함께하기</button></div>`);
 
   document.querySelectorAll('#endModeRow .suit-opt').forEach(el=>{
     el.addEventListener('click', ()=>{ setupEndMode=el.dataset.mode; renderSetupModal(); });
@@ -1333,13 +1686,14 @@ function renderSetupModal(){
       startMatch({endMode:'rounds', totalRounds:setupTotalRounds});
     }
   };
+  document.getElementById('setupOnlineBtn').onclick=()=>{ showOnlineEntry(); };
 }
 
 /* ============================ 저장/불러오기 ============================ */
 let saveTimer=null;
 function queueSave(){ if(saveTimer) clearTimeout(saveTimer); saveTimer=setTimeout(saveGameState, 300); }
 async function saveGameState(){
-  if(!G) return;
+  if(!G || onlineEnabled()) return; // 온라인 대전 상태는 로컬에 저장하지 않는다(각자 방에 다시 접속해서 이어감)
   try{ localStorage.setItem('lexio_save', JSON.stringify({G, matchState})); }catch(e){}
 }
 function flushSaveNow(){ if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; } saveGameState(); }
