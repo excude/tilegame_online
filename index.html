@@ -1,4 +1,8 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.024 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.025 (4인 고정: 나 + AI 3) -->
+<!-- v0.025: AI가 선(先)을 잡았을 때, 누군가 손패가 1~2장만 남아 위험한 상황이면 낮은 싱글부터 시작하던 것을
+     그만두고, 그 사람이 받아칠 수 없을 만큼 많은 개수(페어/트리플)부터 견제로 내도록 수정하고, 그마저
+     없으면 숫자가 가장 높은 패로 견제하도록 변경 · 상대 손패가 1~2장 남았을 때 화면에 남은 장수를
+     빨간색 경고로 표시하도록 변경 -->
 <!-- v0.024: 내 차례에 이길 수 있는 조합이 하나도 없으면(선을 잡은 상태가 아닐 때) 패스 버튼을 직접
      누르지 않아도 잠깐의 안내 메시지 후 자동으로 패스되도록 변경 -->
 <!-- v0.023: 턴이 시작될 때 자동으로 선택돼 있던 추천 조합 타일 때문에, 원하는 다른 타일(예: 10구름을 이기는
@@ -94,6 +98,7 @@
   .seat .name .seatScore.pos{color:#8ee0a8;}
   .seat .name .seatScore.neg{color:#ef9d7d;}
   .seat .cardcount{font-size:9px;opacity:.6;}
+  .seat .cardcount.danger{color:#ff5555;opacity:1;font-weight:700;}
   .leader-badge{position:absolute;top:-6px;right:-6px;background:var(--gold-bright);color:#3a2a0a;font-size:9px;font-weight:900;border-radius:8px;padding:1px 5px;white-space:nowrap;}
 
   #centerArea{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;width:260px;}
@@ -296,7 +301,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.024</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.025</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -684,6 +689,38 @@ function aiFindPlay(hand, requiredCount, prevCombo, dangerNow){
     const singleNums = byNum.filter(n=>groupSize(n)===1);
     const pairNums = byNum.filter(n=>groupSize(n)>=2);
     const tripleNums = byNum.filter(n=>groupSize(n)>=3);
+
+    // ---- 위험 견제: 누군가 1~2장만 남았으면, 낮은 패로 슬슬 시작하는 평소 방식은 위험하다.
+    // 그 사람이 손에 있는 장수만큼도 받아칠 수 없을 만큼 "많은 개수"의 조합(페어/트리플/5장)을
+    // 최우선으로 찾고, 그게 없으면 어쩔 수 없이 남는 가장 "숫자가 높은" 패로 견제한다.
+    if(dangerNow){
+      const selfIdxD=aiSelfIdxOf(hand);
+      const dangerSizes = selfIdxD>=0
+        ? G.players.filter((p,i)=>i!==selfIdxD && p.hand.length<=2).map(p=>p.hand.length)
+        : [];
+      const maxDangerSize = dangerSizes.length ? Math.max(...dangerSizes) : 0;
+      if(maxDangerSize>0){
+        // 상대가 절대 받아칠 수 없는(=가진 장수보다 많이 내는) 조합부터 찾는다.
+        if(maxDangerSize<2 && pairNums.length){
+          const n=pairNums[0];
+          const sorted=tally[n].slice().sort((a,b)=>suitOrder(a.suit)-suitOrder(b.suit));
+          return sorted.slice(0,2);
+        }
+        if(tripleNums.length){
+          const n=tripleNums[0];
+          const sorted=tally[n].slice().sort((a,b)=>suitOrder(a.suit)-suitOrder(b.suit));
+          return sorted.slice(0,3);
+        }
+        if(hand.length>=5){
+          const combos5=kCombos(hand,5);
+          for(const c of combos5){ const ev=evaluatePlay(c,null); if(ev.ok) return c; }
+        }
+        // 더 많은 장수로 확실히 막을 방법이 없다면, 가진 패 중 숫자가 가장 높은 패로 견제한다.
+        const strongestNum=byNum[byNum.length-1];
+        const strongestTile=tally[strongestNum].slice().sort((a,b)=>suitOrder(b.suit)-suitOrder(a.suit))[0];
+        return [strongestTile];
+      }
+    }
 
     // ---- 리드 후보 생성 ----
     // (a) 조합이 안 되는(고립된) 싱글부터 우선 후보로: 나중에 상대가 내 패를 읽기 어렵게
@@ -1482,7 +1519,7 @@ function render(){
     seat.innerHTML=`
       <div class="avatar">${p.name}${G.leader===i?'<div class="leader-badge">선</div>':''}</div>
       <div class="name">${p.name} <span class="seatScore ${matchState.scores[i]>=0?'pos':'neg'}">${matchState.scores[i]}</span></div>
-      <div class="cardcount">${p.hand.length}장</div>`;
+      <div class="cardcount${p.hand.length>0 && p.hand.length<=2?' danger':''}">${p.hand.length}장</div>`;
     seatsWrap.appendChild(seat);
   });
 
