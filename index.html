@@ -811,7 +811,7 @@ let lastRenderedComboKey = null;
      어긋나는 문제가 발생하지 않습니다. (마이티 온라인과 동일한 구조)
 */
 // ⚠️ Render에 서버를 배포한 뒤, 아래 주소를 실제 서비스 주소로 바꿔주세요. (예: wss://lexio-online.onrender.com)
-const ONLINE_SERVER_URL = "wss://lexio-online-relay.onrender.com/ws";
+const ONLINE_SERVER_URL = "wss://tilegame-online.onrender.com/ws";
 const ONLINE_LIMIT_MS = 25000;
 const online = {ws:null, connected:false, host:false, room:"", playerId:null, nickname:"", token:"", players:[], deadline:0, timerHandle:null, uiTimerHandle:null, starting:false};
 let onlineReconnectAttempt = 0;
