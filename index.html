@@ -1,4 +1,7 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.019 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.020 (4인 고정: 나 + AI 3) -->
+<!-- v0.020: 온라인 대전에서 내가 0번이 아닐 때 턴 순서가 시계방향으로 보이지 않던 버그 수정(seatSlot/slotToAbs를
+     TURN_ORDER 기준 상대 위치로 계산), 채팅을 게임 로그에 함께 남기지 않고 전송 시 채팅창이 자동으로 닫히도록 단순화,
+     하단 미니 로그를 가로로 이어붙인 한 줄에서 최근 3개 항목을 세로로 각각 한 줄씩 보이도록 변경 -->
 <!-- v0.019: 게스트가 게임 시작 시 대기실 창이 안 사라지던 버그를 더 확실하게 고침(상태 메시지 수신 즉시 모달을 강제로 닫음),
      채팅 기능 추가, 게스트 효과음 재생 추가 -->
 <!DOCTYPE html>
@@ -114,7 +117,9 @@
 
   /* log */
   #log{position:absolute;bottom:8px;left:8px;right:8px;max-height:60px;overflow:hidden;font-size:10.5px;color:#f5ecd7cc;
-    line-height:1.5;text-shadow:0 1px 2px #000;cursor:pointer;padding:4px 6px;border-radius:8px;word-break:break-word;}
+    line-height:1.5;text-shadow:0 1px 2px #000;cursor:pointer;padding:4px 6px;border-radius:8px;
+    display:flex;flex-direction:column;gap:1px;}
+  #log .logLine{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   #log:active{background:#00000030;}
   .logFull{max-height:50vh;overflow-y:auto;font-size:12px;line-height:1.9;color:#f5ecd7;background:#00000030;border-radius:10px;padding:10px 12px;margin-bottom:12px;}
 
@@ -843,9 +848,20 @@ function onlineEnabled(){ return !!(online.connected && online.ws && online.ws.r
 // 온라인 모드일 땐 서버가 배정해준 내 물리적 자리 번호, 솔로 모드일 땐 항상 0(나)
 function meId(){ return onlineEnabled() ? online.playerId : 0; }
 // 화면상 내 자리가 항상 하단(슬롯 0)에 오도록, 물리적 자리 번호(absId)를 화면 슬롯 번호로 회전시킨다.
-// 슬롯: 0=하단(나) · 1=상단 · 2=우측 · 3=좌측 (TURN_ORDER의 시계방향 배치는 그대로 유지된다)
-function seatSlot(absId){ return (absId - meId() + N_PLAYERS) % N_PLAYERS; }
-function slotToAbs(slot){ return (slot + meId()) % N_PLAYERS; }
+// 슬롯: 0=하단(나) · 1=상단 · 2=우측 · 3=좌측
+// 실제 플레이어 순서는 TURN_ORDER([0,3,1,2], 시계방향)를 그대로 따른다.
+// 단순히 절대 번호를 빼는 방식으로는 내(meId)가 0번이 아닐 때 방향이 뒤틀리므로,
+// TURN_ORDER 안에서의 "나로부터의 상대 위치"로 변환해 항상 시계방향으로 보이게 한다.
+function seatSlot(absId){
+  const myPos = TURN_ORDER.indexOf(meId());
+  const idPos = TURN_ORDER.indexOf(absId);
+  return TURN_ORDER[(idPos - myPos + N_PLAYERS) % N_PLAYERS];
+}
+function slotToAbs(slot){
+  const myPos = TURN_ORDER.indexOf(meId());
+  const slotPos = TURN_ORDER.indexOf(slot);
+  return TURN_ORDER[(slotPos + myPos) % N_PLAYERS];
+}
 function escHtml(s){ return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
 function onlineUrl(){
@@ -977,7 +993,6 @@ function updateChatButtonVisibility(){
 function addChatEntry(name, text, isMe){
   onlineChatHistory.push({name, text, me:!!isMe});
   if(onlineChatHistory.length>200) onlineChatHistory.shift();
-  if(G){ addLog(`💬 ${name}: ${text}`); renderLog(); } // 로그창에도 채팅이 함께 보이도록
   if(!isMe){
     const btn = document.getElementById('chatBubbleBtn');
     if(btn) btn.classList.add('unread');
@@ -1016,7 +1031,7 @@ function openChatModal(){
     if(!text) return;
     sendChatMessage(text);
     input.value='';
-    openChatModal(); // 전송 후 채팅창을 다시 그려서 방금 보낸 메시지가 바로 보이도록 한다
+    closeModal(); // 전송하면 채팅창을 자동으로 닫는다
   };
   document.getElementById('chatSendBtn').onclick = doSend;
   input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); doSend(); } });
@@ -1511,8 +1526,8 @@ function badgeEl(text, cls){ const d=document.createElement('div'); d.className=
 
 function renderLog(){
   const el=document.getElementById('log');
-  const last=G.log.slice(-3).join(' · ');
-  el.textContent=last;
+  const last=G.log.slice(-3);
+  el.innerHTML = last.map(l=>`<div class="logLine">${escHtml(l)}</div>`).join('');
 }
 function renderHand(){
   const wrap=document.getElementById('myHand');
