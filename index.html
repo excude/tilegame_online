@@ -1,4 +1,6 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.018 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.019 (4인 고정: 나 + AI 3) -->
+<!-- v0.019: 게스트가 게임 시작 시 대기실 창이 안 사라지던 버그를 더 확실하게 고침(상태 메시지 수신 즉시 모달을 강제로 닫음),
+     채팅 기능 추가, 게스트 효과음 재생 추가 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -278,7 +280,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.018</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.019</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -927,6 +929,8 @@ let guestLastResultKey = null;
 // 이전 결과 모달이 남아있지 않고 실제 게임판이 보이도록 한다(마이티 온라인의 guestMaybePromptTurn과 동일한 방식).
 function guestSyncModalForState(){
   if(!G || online.host) return;
+  const overlay = document.getElementById('modalOverlay');
+  const isShowing = !!(overlay && overlay.classList.contains('show'));
   if(G.finished){
     let key;
     if(matchState.matchOver) key = 'final:'+matchState.round;
@@ -935,7 +939,9 @@ function guestSyncModalForState(){
       if(!last) return;
       key = 'round:'+matchState.round+':'+last.winnerIdx;
     }
-    if(guestLastResultKey!==key){
+    // key가 바뀌었을 때는 물론이고, (다른 이유로) 모달이 이미 닫혀있는 상태라면 같은 key라도
+    // 다시 열어준다 — 그래야 위에서 방어적으로 먼저 닫아버린 결과 모달도 곧바로 복구된다.
+    if(guestLastResultKey!==key || !isShowing){
       guestLastResultKey = key;
       if(matchState.matchOver) showFinalResultModal();
       else { const last=matchState.history[matchState.history.length-1]; showRoundResultModal(last.roundScores, last.counts, last.winnerIdx, last.transfers, last.isLastRound); }
@@ -1070,15 +1076,24 @@ function connectOnline(nickname, roomCode, token, silentReconnect){
     } else if(m.type==='state'){
       if(online.host) return; // host는 자기 자신이 보낸 broadcast를 되돌려받아도 다시 처리하지 않는다(무한루프 방지)
       if(m.state && m.state.G){
+        // 방금 받은 state 메시지가 처음 게임이 시작된 것이든, 중간 진행 상황이든 관계없이,
+        // 대기실 화면 등 이전에 열려있던 모달을 일단 무조건 먼저 닫는다. 아래 render()나
+        // guestSyncModalForState()에서 예기치 못한 오류가 나더라도 최소한 대기실 창에 갇혀
+        // 게임 화면으로 못 넘어가는 일은 없도록 하기 위한 방어 코드다.
+        closeModal();
         const prevG = G;
-        G = deserializeG(m.state.G);
-        Object.assign(matchState, m.state.matchState||{});
-        if(matchState.endMode==='bust' && (matchState.totalRounds===null||matchState.totalRounds===undefined)) matchState.totalRounds=Infinity;
-        online.deadline = m.state.deadline||0;
-        selection.clear();
-        guestPlaySfxForStateDiff(prevG, G);
-        render();
-        guestSyncModalForState();
+        try{
+          G = deserializeG(m.state.G);
+          Object.assign(matchState, m.state.matchState||{});
+          if(matchState.endMode==='bust' && (matchState.totalRounds===null||matchState.totalRounds===undefined)) matchState.totalRounds=Infinity;
+          online.deadline = m.state.deadline||0;
+          selection.clear();
+          guestPlaySfxForStateDiff(prevG, G);
+          render();
+          guestSyncModalForState();
+        }catch(err){
+          console.error('[online] state 메시지 처리 중 오류', err, m);
+        }
       }
     } else if(m.type==='timer'){
       online.deadline = m.deadline||0; onlineRenderTimer();
