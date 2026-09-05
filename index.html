@@ -1,4 +1,6 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.023 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.024 (4인 고정: 나 + AI 3) -->
+<!-- v0.024: 내 차례에 이길 수 있는 조합이 하나도 없으면(선을 잡은 상태가 아닐 때) 패스 버튼을 직접
+     누르지 않아도 잠깐의 안내 메시지 후 자동으로 패스되도록 변경 -->
 <!-- v0.023: 턴이 시작될 때 자동으로 선택돼 있던 추천 조합 타일 때문에, 원하는 다른 타일(예: 10구름을 이기는
      10별)을 눌러도 선택 장수가 초과되어 낼 수 없던 것처럼 보이던 문제 수정(필요 장수를 이미 채운 상태에서
      새 타일을 누르면 기존 선택을 지우고 교체하도록 변경) · 온라인 대전에서 제한시간 초과 시 host가 임의로
@@ -294,7 +296,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.023</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.024</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -1517,12 +1519,23 @@ function render(){
   if(online.host) broadcastOnlineState();
 }
 // 내 차례가 되면 "추천" 버튼을 누른 것처럼 추천 조합을 기본으로 선택해둔다.
+// 낼 수 있는 조합이 하나도 없으면(=패스 외엔 선택지가 없으면) 자동으로 패스한다.
+let autoPassScheduled=false;
 function autoSelectRecommendedForMyTurn(){
-  if(!G || G.finished || G.turn!==meId()) return;
+  if(!G || G.finished || G.turn!==meId()){ autoPassScheduled=false; return; }
   if(selection.size>0) return;
   const me=G.players[meId()];
   const tiles=aiFindPlay(me.hand, G.requiredCount, G.lastCombo);
-  if(tiles) selection = new Set(tiles.map(tileId));
+  if(tiles){ selection = new Set(tiles.map(tileId)); return; }
+  if(G.requiredCount!=null && !autoPassScheduled){
+    autoPassScheduled=true;
+    showFeedback('낼 수 있는 조합이 없어 자동으로 패스합니다.');
+    setTimeout(()=>{
+      autoPassScheduled=false;
+      if(!G || G.finished || G.turn!==meId()) return;
+      doPass(meId());
+    }, 500);
+  }
 }
 function badgeEl(text, cls){ const d=document.createElement('div'); d.className='status-badge '+(cls||''); d.textContent=text; return d; }
 
