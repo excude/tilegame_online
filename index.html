@@ -116,6 +116,22 @@
   #log:active{background:#00000030;}
   .logFull{max-height:50vh;overflow-y:auto;font-size:12px;line-height:1.9;color:#f5ecd7;background:#00000030;border-radius:10px;padding:10px 12px;margin-bottom:12px;}
 
+  /* ---------- 채팅 ---------- */
+  #chatBubbleBtn{
+    display:none;position:absolute;bottom:8px;right:8px;
+    width:30px;height:30px;border-radius:50%;
+    background:#20142fe6;border:1px solid var(--gold);
+    align-items:center;justify-content:center;
+    font-size:15px;line-height:1;cursor:pointer;
+    box-shadow:0 2px 6px #00000055;z-index:5;
+  }
+  #chatBubbleBtn:active{background:#00000060;}
+  #chatBubbleBtn.unread::after{
+    content:"";position:absolute;top:-1px;right:-1px;
+    width:9px;height:9px;border-radius:50%;
+    background:#e0554f;border:1px solid #1a1410;
+  }
+
   /* hand */
   #handWrap{position:relative;padding:6px 6px 10px;background:linear-gradient(180deg, transparent, #170e20 40%);}
   #feedback{text-align:center;font-size:11px;color:#ef9d7d;min-height:14px;margin-bottom:2px;}
@@ -278,6 +294,7 @@
       <div id="turnFlash"></div>
     </div>
     <div id="log"></div>
+    <div id="chatBubbleBtn" title="채팅">💬</div>
   </div>
   <div id="handWrap">
     <div id="feedback"></div>
@@ -856,7 +873,11 @@ function onlineDisconnect(silent){
   if(online.uiTimerHandle){ clearInterval(online.uiTimerHandle); online.uiTimerHandle=null; }
   const el = document.getElementById('onlineTimer');
   if(el) el.style.display='none';
-  if(!silent){ try{ localStorage.removeItem('lexio_online_room'); localStorage.removeItem('lexio_online_token'); }catch(e){} }
+  if(!silent){
+    try{ localStorage.removeItem('lexio_online_room'); localStorage.removeItem('lexio_online_token'); }catch(e){}
+    onlineChatHistory.length = 0; // 방을 완전히 나가는 경우에만 채팅 기록을 비운다(재접속 시엔 유지)
+  }
+  updateChatButtonVisibility();
 }
 // host만 턴 제한 시간을 발급/집행한다: 제한시간 안에 행동이 없으면(연결이 끊긴 자리 등)
 // host가 대신 추천 조합을 내거나 패스를 실행해 게임이 멈추지 않게 한다.
@@ -902,6 +923,8 @@ function handleOnlineAction(action, pid){
 }
 let guestLastResultKey = null;
 // 게스트 화면에서, host가 보낸 새 상태에 맞춰 결과 모달을 열거나 닫는다(host의 결과 화면과 동기화).
+// 그 외의 일반 진행 상태(게임이 막 시작됐을 때 포함)에서는 항상 모달을 닫아, 대기실 화면이나
+// 이전 결과 모달이 남아있지 않고 실제 게임판이 보이도록 한다(마이티 온라인의 guestMaybePromptTurn과 동일한 방식).
 function guestSyncModalForState(){
   if(!G || online.host) return;
   if(G.finished){
@@ -917,10 +940,82 @@ function guestSyncModalForState(){
       if(matchState.matchOver) showFinalResultModal();
       else { const last=matchState.history[matchState.history.length-1]; showRoundResultModal(last.roundScores, last.counts, last.winnerIdx, last.transfers, last.isLastRound); }
     }
-  } else if(guestLastResultKey!==null){
+  } else {
     guestLastResultKey = null;
     closeModal();
   }
+}
+// 게스트는 doPlay/doPass를 직접 실행하지 않고 host가 보낸 state 브로드캐스트로 화면만
+// 갱신하기 때문에, 기존에는 sfxPlay()를 거치는 코드 경로 자체를 타지 않아 온라인 모드(게스트 시점)
+// 에서는 효과음이 전혀 나지 않았다(마이티 온라인에서 이미 고쳤던 것과 같은 종류의 문제).
+// 이전/이후 상태를 비교해서 타일 낸 소리·패스 소리·라운드 승리 소리를 게스트 쪽에서도 재현해준다.
+function guestPlaySfxForStateDiff(prevG, newG){
+  try{
+    if(!prevG || !newG) return;
+    if(newG.finished && !prevG.finished){ sfxPlay('roundwin'); return; }
+    if(prevG.finished || newG.finished) return; // 라운드 종료 전후 비교는 의미가 없으므로 건너뜀
+    if((newG.log||[]).length <= (prevG.log||[]).length) return; // 실제 진행 없이 재전송된 상태(재접속 등)는 무시
+    const prevTotal = prevG.players.reduce((s,p)=>s+p.hand.length,0);
+    const newTotal = newG.players.reduce((s,p)=>s+p.hand.length,0);
+    sfxPlay(newTotal < prevTotal ? 'tile' : 'pass');
+  }catch(e){ /* 무시 */ }
+}
+/* ============================ 온라인 채팅 ============================ */
+// 채팅 기록은 판이 바뀌어도(새 게임 시 G.log가 초기화되어도) 남아있도록 G와 별도로 보관한다.
+const onlineChatHistory = [];
+function updateChatButtonVisibility(){
+  const btn = document.getElementById('chatBubbleBtn');
+  if(!btn) return;
+  btn.style.display = onlineEnabled() ? 'flex' : 'none';
+}
+function addChatEntry(name, text, isMe){
+  onlineChatHistory.push({name, text, me:!!isMe});
+  if(onlineChatHistory.length>200) onlineChatHistory.shift();
+  if(G){ addLog(`💬 ${name}: ${text}`); renderLog(); } // 로그창에도 채팅이 함께 보이도록
+  if(!isMe){
+    const btn = document.getElementById('chatBubbleBtn');
+    if(btn) btn.classList.add('unread');
+    showFeedback(`💬 ${name}: ${text}`);
+  }
+}
+function sendChatMessage(text){
+  if(!onlineEnabled()) return;
+  text = String(text||'').trim().slice(0,200);
+  if(!text) return;
+  const name = online.nickname || '플레이어';
+  onlineSend({type:'chat', text});
+  addChatEntry(name, text, true);
+}
+function openChatModal(){
+  const btn = document.getElementById('chatBubbleBtn');
+  if(btn) btn.classList.remove('unread');
+  const historyHtml = onlineChatHistory.slice(-30).map(c=>
+    `<div style="margin-bottom:6px;${c.me?'text-align:right;':''}">
+      <span style="font-size:11px;opacity:.65;">${escHtml(c.name)}</span><br>
+      <span style="display:inline-block;background:${c.me?'#c99a4a33':'#00000030'};padding:6px 10px;border-radius:10px;font-size:13px;">${escHtml(c.text)}</span>
+    </div>`).join('') || '<p class="sub" style="text-align:center;">아직 채팅이 없습니다.</p>';
+  openModal(`
+    <h2>채팅</h2>
+    <div id="chatHistoryBox" style="max-height:40vh;overflow-y:auto;margin-bottom:12px;">${historyHtml}</div>
+    <div class="row" style="gap:6px;flex-wrap:nowrap;">
+      <input id="chatInputBox" maxlength="200" placeholder="메시지를 입력하세요" style="flex:1;min-width:0;padding:10px;border-radius:8px;border:1px solid var(--line);background:#0000002a;color:var(--ivory);font-size:14px;">
+    </div>
+    <div class="modal-actions"><button class="btn ghost" id="chatCloseBtn">닫기</button><button class="btn" id="chatSendBtn">전송</button></div>
+  `, true);
+  const box = document.getElementById('chatHistoryBox');
+  if(box) box.scrollTop = box.scrollHeight;
+  const input = document.getElementById('chatInputBox');
+  const doSend = ()=>{
+    const text = (input.value||'').trim();
+    if(!text) return;
+    sendChatMessage(text);
+    input.value='';
+    openChatModal(); // 전송 후 채팅창을 다시 그려서 방금 보낸 메시지가 바로 보이도록 한다
+  };
+  document.getElementById('chatSendBtn').onclick = doSend;
+  input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); doSend(); } });
+  document.getElementById('chatCloseBtn').onclick = closeModal;
+  setTimeout(()=>{ if(input) input.focus(); }, 50);
 }
 function connectOnline(nickname, roomCode, token, silentReconnect){
   onlineDisconnect(true);
@@ -963,26 +1058,32 @@ function connectOnline(nickname, roomCode, token, silentReconnect){
       } else {
         renderOnlineLobby();
       }
+      updateChatButtonVisibility();
     } else if(m.type==='lobby'){
       online.players = m.players||[];
       const me = online.players.find(p=>p.id===online.playerId);
       online.host = !!(me && me.host);
       renderOnlineLobby();
+      updateChatButtonVisibility();
     } else if(m.type==='action' && online.host){
       handleOnlineAction(m.action, m.playerId);
     } else if(m.type==='state'){
       if(online.host) return; // host는 자기 자신이 보낸 broadcast를 되돌려받아도 다시 처리하지 않는다(무한루프 방지)
       if(m.state && m.state.G){
+        const prevG = G;
         G = deserializeG(m.state.G);
         Object.assign(matchState, m.state.matchState||{});
         if(matchState.endMode==='bust' && (matchState.totalRounds===null||matchState.totalRounds===undefined)) matchState.totalRounds=Infinity;
         online.deadline = m.state.deadline||0;
         selection.clear();
+        guestPlaySfxForStateDiff(prevG, G);
         render();
         guestSyncModalForState();
       }
     } else if(m.type==='timer'){
       online.deadline = m.deadline||0; onlineRenderTimer();
+    } else if(m.type==='chat'){
+      addChatEntry(m.name||'플레이어', m.text||'', false);
     } else if(m.type==='peer_away'){
       showFeedback(`⏸️ ${m.name||'플레이어'}님의 연결이 잠시 끊겼습니다. 10초 안에 안 돌아오면 게임이 종료됩니다.`);
     } else if(m.type==='peer_back'){
@@ -1001,6 +1102,7 @@ function connectOnline(nickname, roomCode, token, silentReconnect){
     const was = online.connected;
     online.connected=false; online.ws=null;
     const el = document.getElementById('onlineTimer'); if(el) el.style.display='none';
+    updateChatButtonVisibility();
     console.warn('[online] 연결이 종료됨', {code: ev && ev.code, reason: ev && ev.reason, wasConnected: was, silentReconnect});
     if(was || silentReconnect){
       // 한 번이라도 연결됐었거나(끊김) / 조용한 재접속 시도 중이었다면 -> 자동 재시도
@@ -1468,9 +1570,25 @@ document.getElementById('ruleBtn').addEventListener('click', showRulesModal);
 document.getElementById('sfxToggle').addEventListener('click', toggleSfx);
 
 /* ============================ 모달 ============================ */
-function openModal(html){
+function openModal(html, keepHandVisible){
   document.getElementById('modalBox').innerHTML=html;
-  document.getElementById('modalOverlay').classList.add('show');
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.add('show');
+  const box = document.getElementById('modalBox');
+  if(keepHandVisible){
+    const handH = document.getElementById('handWrap').getBoundingClientRect().height;
+    overlay.style.bottom = handH+'px';
+    overlay.style.alignItems = 'flex-start';
+    overlay.style.paddingTop = '8px';
+    overlay.style.background = '#00000060';
+    box.style.maxHeight = `calc(100vh - ${handH}px - 24px)`;
+  } else {
+    overlay.style.bottom = '0';
+    overlay.style.alignItems = 'center';
+    overlay.style.paddingTop = '20px';
+    overlay.style.background = '#000000a0';
+    box.style.maxHeight = '82vh';
+  }
 }
 function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); }
 // 로그 모달. onBack이 주어지면(결과창 등에서 열었을 때) "닫기" 대신 "돌아가기"로 표시하고
@@ -1729,6 +1847,9 @@ window.addEventListener('blur', flushSaveNow);
 /* ============================ 초기화 ============================ */
 (async function init(){
   wakeOnlineServer(); // 페이지 진입 즉시 Render 서버 깨우기 시작 (마이티와 동일한 방식)
+  const chatBtn = document.getElementById('chatBubbleBtn');
+  if(chatBtn) chatBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openChatModal(); });
+  updateChatButtonVisibility();
   loadSfxPref();
   await loadProfile();
   try{
