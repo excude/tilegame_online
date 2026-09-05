@@ -1,7 +1,16 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.020 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.023 (4인 고정: 나 + AI 3) -->
+<!-- v0.023: 턴이 시작될 때 자동으로 선택돼 있던 추천 조합 타일 때문에, 원하는 다른 타일(예: 10구름을 이기는
+     10별)을 눌러도 선택 장수가 초과되어 낼 수 없던 것처럼 보이던 문제 수정(필요 장수를 이미 채운 상태에서
+     새 타일을 누르면 기존 선택을 지우고 교체하도록 변경) · 온라인 대전에서 제한시간 초과 시 host가 임의로
+     조합을 대신 내던 것을 그만두고, 선(先)이라 패스가 불가능한 경우가 아니면 항상 자동 패스로 처리하도록 변경 -->
+<!-- v0.022: 온라인 대전에서 방장이 아닌 플레이어가 손패 정렬(무늬순/숫자순)을 바꿔도 타일을 낸 뒤
+     host의 state 동기화로 정렬이 계속 초기화되던 버그 수정 — 정렬을 실제 데이터가 아닌
+     화면 표시 시점에만 적용하도록 변경(renderHand에서 복사본만 정렬) -->
+<!-- v0.021: 채팅 아이콘을 누르면 채팅 로그(기록) 없이 입력창만 뜨도록 단순화하고, 실제로 주고받은 채팅 내용은
+     메인화면 하단 로그(및 로그 전체보기)에 표시되도록 변경(별도 채팅 기록 저장소는 제거) -->
 <!-- v0.020: 온라인 대전에서 내가 0번이 아닐 때 턴 순서가 시계방향으로 보이지 않던 버그 수정(seatSlot/slotToAbs를
-     TURN_ORDER 기준 상대 위치로 계산), 채팅을 게임 로그에 함께 남기지 않고 전송 시 채팅창이 자동으로 닫히도록 단순화,
-     하단 미니 로그를 가로로 이어붙인 한 줄에서 최근 3개 항목을 세로로 각각 한 줄씩 보이도록 변경 -->
+     TURN_ORDER 기준 상대 위치로 계산), 하단 미니 로그를 가로로 이어붙인 한 줄에서 최근 3개 항목을 세로로
+     각각 한 줄씩 보이도록 변경 -->
 <!-- v0.019: 게스트가 게임 시작 시 대기실 창이 안 사라지던 버그를 더 확실하게 고침(상태 메시지 수신 즉시 모달을 강제로 닫음),
      채팅 기능 추가, 게스트 효과음 재생 추가 -->
 <!DOCTYPE html>
@@ -893,7 +902,6 @@ function onlineDisconnect(silent){
   if(el) el.style.display='none';
   if(!silent){
     try{ localStorage.removeItem('lexio_online_room'); localStorage.removeItem('lexio_online_token'); }catch(e){}
-    onlineChatHistory.length = 0; // 방을 완전히 나가는 경우에만 채팅 기록을 비운다(재접속 시엔 유지)
   }
   updateChatButtonVisibility();
 }
@@ -908,9 +916,14 @@ function onlineArmTimer(){
   online.timerHandle = setInterval(()=>{
     if(!online.host || !G || G.finished || G.turn!==pid || Date.now()<online.deadline) return;
     clearInterval(online.timerHandle); online.timerHandle=null; online.deadline=0;
-    const p = G.players[pid];
-    const tiles = aiFindPlay(p.hand, G.requiredCount, G.lastCombo);
-    if(tiles) doPlay(pid, tiles, true); else doPass(pid, true);
+    if(G.requiredCount==null){
+      // 선(先)일 때는 규칙상 패스가 불가능하므로, 이 경우에만 예외적으로 추천 조합을 대신 낸다.
+      const p = G.players[pid];
+      const tiles = aiFindPlay(p.hand, G.requiredCount, G.lastCombo);
+      if(tiles) doPlay(pid, tiles, true); else doPass(pid, true);
+    } else {
+      doPass(pid, true); // 시간 초과 시 임의로 내지 않고 항상 패스 처리한다
+    }
   }, 250);
 }
 function onlineRenderTimer(){
@@ -983,16 +996,13 @@ function guestPlaySfxForStateDiff(prevG, newG){
   }catch(e){ /* 무시 */ }
 }
 /* ============================ 온라인 채팅 ============================ */
-// 채팅 기록은 판이 바뀌어도(새 게임 시 G.log가 초기화되어도) 남아있도록 G와 별도로 보관한다.
-const onlineChatHistory = [];
 function updateChatButtonVisibility(){
   const btn = document.getElementById('chatBubbleBtn');
   if(!btn) return;
   btn.style.display = onlineEnabled() ? 'flex' : 'none';
 }
 function addChatEntry(name, text, isMe){
-  onlineChatHistory.push({name, text, me:!!isMe});
-  if(onlineChatHistory.length>200) onlineChatHistory.shift();
+  if(G){ addLog(`💬 ${name}: ${text}`); renderLog(); } // 실제 채팅 내용은 메인화면 로그에 표시한다
   if(!isMe){
     const btn = document.getElementById('chatBubbleBtn');
     if(btn) btn.classList.add('unread');
@@ -1010,21 +1020,13 @@ function sendChatMessage(text){
 function openChatModal(){
   const btn = document.getElementById('chatBubbleBtn');
   if(btn) btn.classList.remove('unread');
-  const historyHtml = onlineChatHistory.slice(-30).map(c=>
-    `<div style="margin-bottom:6px;${c.me?'text-align:right;':''}">
-      <span style="font-size:11px;opacity:.65;">${escHtml(c.name)}</span><br>
-      <span style="display:inline-block;background:${c.me?'#c99a4a33':'#00000030'};padding:6px 10px;border-radius:10px;font-size:13px;">${escHtml(c.text)}</span>
-    </div>`).join('') || '<p class="sub" style="text-align:center;">아직 채팅이 없습니다.</p>';
   openModal(`
     <h2>채팅</h2>
-    <div id="chatHistoryBox" style="max-height:40vh;overflow-y:auto;margin-bottom:12px;">${historyHtml}</div>
     <div class="row" style="gap:6px;flex-wrap:nowrap;">
       <input id="chatInputBox" maxlength="200" placeholder="메시지를 입력하세요" style="flex:1;min-width:0;padding:10px;border-radius:8px;border:1px solid var(--line);background:#0000002a;color:var(--ivory);font-size:14px;">
     </div>
     <div class="modal-actions"><button class="btn ghost" id="chatCloseBtn">닫기</button><button class="btn" id="chatSendBtn">전송</button></div>
   `, true);
-  const box = document.getElementById('chatHistoryBox');
-  if(box) box.scrollTop = box.scrollHeight;
   const input = document.getElementById('chatInputBox');
   const doSend = ()=>{
     const text = (input.value||'').trim();
@@ -1533,13 +1535,25 @@ function renderHand(){
   const wrap=document.getElementById('myHand');
   wrap.innerHTML='';
   const me=G.players[meId()];
-  me.hand.forEach(t=>{
+  const displayHand = me.hand.slice();
+  applyCurrentHandSort(displayHand); // 실제 G 데이터는 건드리지 않고 화면 표시용 복사본만 정렬한다
+  // (온라인 대전에서는 host가 보낸 state가 내 손패 배열을 통째로 덮어쓰므로, 여기서 직접
+  //  손패 배열을 정렬해버리면 다음 state 수신 때 내가 고른 정렬 모드가 매번 초기화된다)
+  displayHand.forEach(t=>{
     const el=tileEl(t,'htile');
     if(selection.has(tileId(t))) el.classList.add('selected');
     el.addEventListener('click', ()=>{
       if(G.finished || G.turn!==meId()) return;
       const id=tileId(t);
-      if(selection.has(id)) selection.delete(id); else selection.add(id);
+      if(selection.has(id)){
+        selection.delete(id);
+      } else {
+        // 정해진 장수를 이미 다 골라둔 상태(예: 턴이 시작될 때 자동으로 추천 조합이 선택되어 있던 경우)에서
+        // 다른 타일을 새로 누르면, 그냥 추가되어 장수가 초과되는 바람에 낼 수 없는 것처럼 보이지 않도록
+        // 기존 선택을 지우고 새로 누른 타일로 바꿔준다.
+        if(G.requiredCount!=null && selection.size>=G.requiredCount) selection.clear();
+        selection.add(id);
+      }
       renderHand(); updateActionState();
     });
     wrap.appendChild(el);
@@ -1578,7 +1592,6 @@ document.getElementById('passBtn').addEventListener('click', ()=>{
 document.getElementById('sortBtn').addEventListener('click', ()=>{
   if(!G || G.finished) return;
   handSortMode = handSortMode==='number' ? 'suit' : 'number';
-  applyCurrentHandSort(G.players[meId()].hand);
   renderHand();
   updateActionState();
 });
