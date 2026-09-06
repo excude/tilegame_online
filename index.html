@@ -1,4 +1,12 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.025 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.027 (4인 고정: 나 + AI 3) -->
+<!-- v0.027: AI가 강패를 너무 쉽게 써버린다는 피드백을 반영 — 낼 수 있는 조합이 여러 개일 때,
+     몬테카를로 승률이 확실히(15%p 이상) 더 높지 않으면 굳이 더 아까운(페어/트리플/족보) 패로
+     갈아타지 않고 가장 아끼는 패로 이기도록 변경. 다만 견제가 급한 상황(danger)에서는 그대로
+     강한 패부터 우선한다 -->
+<!-- v0.026: 레벨이 예전 마이티보다 밋밋하다는 피드백을 반영 — 레벨업 필요 경험치를 줄이고
+     (100+35*(Lv-1) → 80+25*(Lv-1)), 오를 때도 크게 오르고 떨어질 때도 크게 떨어지도록 라운드
+     순위별 획득/페널티 폭을 키움(1위 14→22, 2위 4→8, 3위 -3→-8, 4위 -8→-18, 압승/연승 보너스도 상향),
+     성적이 나쁘면 레벨 자체도 실제로 떨어지도록 유지 -->
 <!-- v0.025: AI가 선(先)을 잡았을 때, 누군가 손패가 1~2장만 남아 위험한 상황이면 낮은 싱글부터 시작하던 것을
      그만두고, 그 사람이 받아칠 수 없을 만큼 많은 개수(페어/트리플)부터 견제로 내도록 수정하고, 그마저
      없으면 숫자가 가장 높은 패로 견제하도록 변경 · 상대 손패가 1~2장 남았을 때 화면에 남은 장수를
@@ -301,7 +309,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.025</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.027</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -652,15 +660,20 @@ function aiRolloutToEnd(hands, turn, lastCombo, requiredCount, passCount){
   }
   return -1;
 }
-// 후보 수들 중 몬테카를로 승률이 가장 높은 것을 고른다 (동률 시 먼저 나온 후보 우선)
-function aiPickByMonteCarlo(selfIdx, candidateTilesList, requiredCount, prevCombo, rollouts){
+// 후보 수들 중 몬테카를로 승률이 가장 높은 것을 고른다 (동률 시 먼저 나온 후보 우선).
+// candidateTilesList는 이미 "아끼는(약한) 패가 먼저" 오도록 정렬되어 있다는 전제 하에,
+// conserveMargin을 주면 뒤쪽의 더 강한/아까운 패가 "확실히"(margin 이상) 더 유리할 때만
+// 갈아타도록 해서, 아슬아슬한 상황이 아니면 강패를 함부로 쓰지 않고 아끼게 한다.
+function aiPickByMonteCarlo(selfIdx, candidateTilesList, requiredCount, prevCombo, rollouts, conserveMargin){
+  conserveMargin = conserveMargin||0;
   let best=candidateTilesList[0], bestScore=-1;
-  for(const tiles of candidateTilesList){
+  candidateTilesList.forEach((tiles,i)=>{
     let wins=0;
     for(let r=0;r<rollouts;r++){ if(simulateAfterMove(selfIdx, tiles, requiredCount, prevCombo)) wins++; }
     const score=wins/rollouts;
-    if(score>bestScore){ bestScore=score; best=tiles; }
-  }
+    if(i===0){ bestScore=score; best=tiles; return; }
+    if(score>bestScore+conserveMargin){ bestScore=score; best=tiles; }
+  });
   return best;
 }
 
@@ -754,9 +767,11 @@ function aiFindPlay(hand, requiredCount, prevCombo, dangerNow){
     }
 
     // ---- 몬테카를로 시뮬레이션으로 승률이 가장 높은 후보를 선택 ----
+    // (단, 후보는 이미 "고립된 싱글 → 페어 → 트리플 → 5장 족보" 순으로 아끼는 패가 먼저
+    //  오도록 정렬돼 있으므로, 뒤쪽의 더 아까운 패가 확실히(15%p 이상) 더 유리할 때만 쓴다.)
     const selfIdx=aiSelfIdxOf(hand);
     if(selfIdx>=0 && validCandidates.length>1){
-      return aiPickByMonteCarlo(selfIdx, validCandidates, null, prevCombo, 10);
+      return aiPickByMonteCarlo(selfIdx, validCandidates, null, prevCombo, 10, 0.15);
     }
     // G 컨텍스트 없이 불릴 때(시뮬레이션 내부 등)는 가벼운 확률적 휴리스틱으로 대체
     const tripleCand=candidates.find((c,i)=>tripleNums.length && i===singleNums.slice(0,3).length+pairNums.slice(0,2).length);
@@ -799,11 +814,12 @@ function aiFindPlay(hand, requiredCount, prevCombo, dangerNow){
     return candidates[0].tiles;
   }
   // 페어/트리플/5장 조합은 어떤 걸 깨서 내는 게 유리한지가 더 복잡하므로, 상위 후보 중
-  // 몬테카를로로 승률이 가장 높은 패를 골라서 낸다.
+  // 몬테카를로로 승률이 가장 높은 패를 골라서 낸다. danger 상황이 아니면, 이미 정렬된
+  // 가장 아끼는 후보보다 확실히(15%p 이상) 더 유리할 때만 더 아까운 조합으로 갈아탄다.
   const selfIdx=aiSelfIdxOf(hand);
   if(selfIdx>=0 && candidates.length>1){
     const shortlist=candidates.slice(0,4).map(x=>x.tiles);
-    return aiPickByMonteCarlo(selfIdx, shortlist, requiredCount, prevCombo, 8);
+    return aiPickByMonteCarlo(selfIdx, shortlist, requiredCount, prevCombo, 8, dangerNow?0:0.15);
   }
   return candidates[0].tiles;
 }
@@ -817,21 +833,23 @@ async function loadProfile(){
   }catch(e){ /* 첫 실행 */ }
 }
 async function saveProfile(){ try{ localStorage.setItem('lexio_profile', JSON.stringify(profile)); }catch(e){} }
-function xpToNextLevel(level){ return 100 + (level-1)*35; }
+function xpToNextLevel(level){ return 80 + (level-1)*25; }
 function levelProgressPercent(level, xp){ return Math.max(0, Math.min(100, (xp/xpToNextLevel(level))*100)); }
 // 라운드가 끝날 때마다(마이티 온라인처럼) 그 라운드 성적을 기준으로 XP를 정산한다.
+// (예전 마이티보다 밋밋하다는 피드백을 반영해, 오를 때도 크게 오르고 떨어질 때도 크게
+//  떨어지도록 획득/페널티 폭을 키웠다. 성적이 나쁘면 레벨 자체도 실제로 떨어질 수 있다.)
 function computeRoundXpGain(rank, myScore, scores){
   const breakdown=[];
-  if(rank===0){ breakdown.push({label:'🏆 라운드 1위', amount:14}); }
-  else if(rank===1){ breakdown.push({label:'🥈 라운드 2위', amount:4}); }
-  else if(rank===2){ breakdown.push({label:'🥉 라운드 3위', amount:-3}); }
-  else{ breakdown.push({label:'라운드 4위', amount:-8}); }
+  if(rank===0){ breakdown.push({label:'🏆 라운드 1위', amount:22}); }
+  else if(rank===1){ breakdown.push({label:'🥈 라운드 2위', amount:8}); }
+  else if(rank===2){ breakdown.push({label:'🥉 라운드 3위', amount:-8}); }
+  else{ breakdown.push({label:'라운드 4위', amount:-18}); }
   const avgOthers = (scores.reduce((a,b)=>a+b,0)-myScore) / (scores.length-1);
   const margin = myScore-avgOthers;
-  if(rank===0 && margin>0){ const bonus=Math.max(0,Math.min(12,Math.round(margin/3))); if(bonus>0) breakdown.push({label:'💥 압승 보너스', amount:bonus}); }
+  if(rank===0 && margin>0){ const bonus=Math.max(0,Math.min(16,Math.round(margin/2))); if(bonus>0) breakdown.push({label:'💥 압승 보너스', amount:bonus}); }
   if(rank===0){ profile.currentStreak+=1; profile.bestStreak=Math.max(profile.bestStreak, profile.currentStreak); }
   else{ profile.currentStreak=0; }
-  if(rank===0 && profile.currentStreak>=2){ const sb=Math.min(15,(profile.currentStreak-1)*3); breakdown.push({label:`🔥 ${profile.currentStreak}라운드 연승`, amount:sb}); }
+  if(rank===0 && profile.currentStreak>=2){ const sb=Math.min(20,(profile.currentStreak-1)*4); breakdown.push({label:`🔥 ${profile.currentStreak}라운드 연승`, amount:sb}); }
   const xp = breakdown.reduce((s,b)=>s+b.amount,0);
   return {xp, breakdown};
 }
