@@ -1,4 +1,7 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.027 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.028 (4인 고정: 나 + AI 3) -->
+<!-- v0.028: 레벨이 너무 빨리 오른다는 피드백을 반영해 v0.026에서 키웠던 라운드 순위별 경험치
+     획득/페널티 폭을 절반으로 줄임(1위 22→11, 2위 8→4, 3위 -8→-4, 4위 -18→-9, 압승/연승
+     보너스도 절반) -->
 <!-- v0.027: AI가 강패를 너무 쉽게 써버린다는 피드백을 반영 — 낼 수 있는 조합이 여러 개일 때,
      몬테카를로 승률이 확실히(15%p 이상) 더 높지 않으면 굳이 더 아까운(페어/트리플/족보) 패로
      갈아타지 않고 가장 아끼는 패로 이기도록 변경. 다만 견제가 급한 상황(danger)에서는 그대로
@@ -309,7 +312,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.027</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.028</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -836,20 +839,19 @@ async function saveProfile(){ try{ localStorage.setItem('lexio_profile', JSON.st
 function xpToNextLevel(level){ return 80 + (level-1)*25; }
 function levelProgressPercent(level, xp){ return Math.max(0, Math.min(100, (xp/xpToNextLevel(level))*100)); }
 // 라운드가 끝날 때마다(마이티 온라인처럼) 그 라운드 성적을 기준으로 XP를 정산한다.
-// (예전 마이티보다 밋밋하다는 피드백을 반영해, 오를 때도 크게 오르고 떨어질 때도 크게
-//  떨어지도록 획득/페널티 폭을 키웠다. 성적이 나쁘면 레벨 자체도 실제로 떨어질 수 있다.)
+// (레벨이 너무 빨리 오른다는 피드백을 반영해, v0.026의 획득/페널티 폭을 절반으로 줄였다.)
 function computeRoundXpGain(rank, myScore, scores){
   const breakdown=[];
-  if(rank===0){ breakdown.push({label:'🏆 라운드 1위', amount:22}); }
-  else if(rank===1){ breakdown.push({label:'🥈 라운드 2위', amount:8}); }
-  else if(rank===2){ breakdown.push({label:'🥉 라운드 3위', amount:-8}); }
-  else{ breakdown.push({label:'라운드 4위', amount:-18}); }
+  if(rank===0){ breakdown.push({label:'🏆 라운드 1위', amount:11}); }
+  else if(rank===1){ breakdown.push({label:'🥈 라운드 2위', amount:4}); }
+  else if(rank===2){ breakdown.push({label:'🥉 라운드 3위', amount:-4}); }
+  else{ breakdown.push({label:'라운드 4위', amount:-9}); }
   const avgOthers = (scores.reduce((a,b)=>a+b,0)-myScore) / (scores.length-1);
   const margin = myScore-avgOthers;
-  if(rank===0 && margin>0){ const bonus=Math.max(0,Math.min(16,Math.round(margin/2))); if(bonus>0) breakdown.push({label:'💥 압승 보너스', amount:bonus}); }
+  if(rank===0 && margin>0){ const bonus=Math.max(0,Math.min(8,Math.round(margin/4))); if(bonus>0) breakdown.push({label:'💥 압승 보너스', amount:bonus}); }
   if(rank===0){ profile.currentStreak+=1; profile.bestStreak=Math.max(profile.bestStreak, profile.currentStreak); }
   else{ profile.currentStreak=0; }
-  if(rank===0 && profile.currentStreak>=2){ const sb=Math.min(20,(profile.currentStreak-1)*4); breakdown.push({label:`🔥 ${profile.currentStreak}라운드 연승`, amount:sb}); }
+  if(rank===0 && profile.currentStreak>=2){ const sb=Math.min(10,(profile.currentStreak-1)*2); breakdown.push({label:`🔥 ${profile.currentStreak}라운드 연승`, amount:sb}); }
   const xp = breakdown.reduce((s,b)=>s+b.amount,0);
   return {xp, breakdown};
 }
