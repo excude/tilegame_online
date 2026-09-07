@@ -1,4 +1,9 @@
-<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.028 (4인 고정: 나 + AI 3) -->
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.029 (4인 고정: 나 + AI 3) -->
+<!-- v0.029: (1) 5장 족보 랭킹(플러시 vs 풀하우스)을 검토·검증함 — 스트레이트 < 플러시 < 풀하우스 <
+     포카드 < 스트레이트플러시 순으로 이미 정상 동작 중임을 확인(테스트 완료).
+     (2) 온라인 대전(게스트) 모바일 환경에서, 다른 플레이어가 패를 낼 때마다 오는 state 브로드캐스트가
+     채팅 입력창을 무조건 강제로 닫아버려 포커스를 잃던 버그 수정 — 채팅창이 열려있을 때는
+     해당 방어적 closeModal() 호출을 건너뛰도록 함(isChatModalOpen 헬퍼 추가). -->
 <!-- v0.028: 레벨이 너무 빨리 오른다는 피드백을 반영해 v0.026에서 키웠던 라운드 순위별 경험치
      획득/페널티 폭을 절반으로 줄임(1위 22→11, 2위 8→4, 3위 -8→-4, 4위 -18→-9, 압승/연승
      보너스도 절반) -->
@@ -312,7 +317,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.028</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.029</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -1015,6 +1020,10 @@ let guestLastResultKey = null;
 // 게스트 화면에서, host가 보낸 새 상태에 맞춰 결과 모달을 열거나 닫는다(host의 결과 화면과 동기화).
 // 그 외의 일반 진행 상태(게임이 막 시작됐을 때 포함)에서는 항상 모달을 닫아, 대기실 화면이나
 // 이전 결과 모달이 남아있지 않고 실제 게임판이 보이도록 한다(마이티 온라인의 guestMaybePromptTurn과 동일한 방식).
+function isChatModalOpen(){
+  const overlay = document.getElementById('modalOverlay');
+  return !!(overlay && overlay.classList.contains('show') && document.getElementById('chatInputBox'));
+}
 function guestSyncModalForState(){
   if(!G || online.host) return;
   const overlay = document.getElementById('modalOverlay');
@@ -1036,7 +1045,9 @@ function guestSyncModalForState(){
     }
   } else {
     guestLastResultKey = null;
-    closeModal();
+    // 채팅창이 열려 있을 때는 닫지 않는다 — 그렇지 않으면 다른 플레이어가 패를 낼 때마다
+    // 오는 state 브로드캐스트 때문에 채팅 입력창이 계속 닫히고(포커스도 잃고) 만다.
+    if(!isChatModalOpen()) closeModal();
   }
 }
 // 게스트는 doPlay/doPass를 직접 실행하지 않고 host가 보낸 state 브로드캐스트로 화면만
@@ -1156,7 +1167,9 @@ function connectOnline(nickname, roomCode, token, silentReconnect){
         // 대기실 화면 등 이전에 열려있던 모달을 일단 무조건 먼저 닫는다. 아래 render()나
         // guestSyncModalForState()에서 예기치 못한 오류가 나더라도 최소한 대기실 창에 갇혀
         // 게임 화면으로 못 넘어가는 일은 없도록 하기 위한 방어 코드다.
-        closeModal();
+        // 단, 채팅창이 열려있는 경우는 예외로 둔다 — 그렇지 않으면 다른 플레이어가 패를 낼 때마다
+        // (=state 메시지를 받을 때마다) 채팅 입력창이 강제로 닫히고 포커스를 잃는 버그가 생긴다.
+        if(!isChatModalOpen()) closeModal();
         const prevG = G;
         try{
           G = deserializeG(m.state.G);
