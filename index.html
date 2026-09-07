@@ -1,3 +1,10 @@
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.030 (4인 고정: 나 + AI 3) -->
+<!-- v0.030: 온라인 대전에서 게스트가 마지막 라운드의 "N라운드 결과" 화면을 못 보고 곧바로
+     게임이 끝나버리는 버그 수정 — host는 라운드가 끝나는 순간 matchState.matchOver를 먼저
+     true로 설정한 뒤 state를 브로드캐스트하는데, 게스트 쪽에서 이 matchOver 플래그만 보고
+     라운드 결과 없이 바로 최종 결과 모달을 띄우던 게 원인이었다. 이제 게스트도 host와 동일하게
+     라운드 결과 모달을 먼저 띄우고, "확인"을 누른 뒤에(마지막 라운드라면) 최종 결과 모달로
+     넘어가도록 함. -->
 <!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.029 (4인 고정: 나 + AI 3) -->
 <!-- v0.029: (1) 5장 족보 랭킹(플러시 vs 풀하우스)을 검토·검증함 — 스트레이트 < 플러시 < 풀하우스 <
      포카드 < 스트레이트플러시 순으로 이미 정상 동작 중임을 확인(테스트 완료).
@@ -317,7 +324,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.029</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.030</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -1029,19 +1036,18 @@ function guestSyncModalForState(){
   const overlay = document.getElementById('modalOverlay');
   const isShowing = !!(overlay && overlay.classList.contains('show'));
   if(G.finished){
-    let key;
-    if(matchState.matchOver) key = 'final:'+matchState.round;
-    else {
-      const last = matchState.history[matchState.history.length-1];
-      if(!last) return;
-      key = 'round:'+matchState.round+':'+last.winnerIdx;
-    }
-    // key가 바뀌었을 때는 물론이고, (다른 이유로) 모달이 이미 닫혀있는 상태라면 같은 key라도
-    // 다시 열어준다 — 그래야 위에서 방어적으로 먼저 닫아버린 결과 모달도 곧바로 복구된다.
+    // 게스트도 host와 동일하게 "N라운드 결과" 모달을 먼저 보여준다. 예전에는 matchOver가
+    // (host 쪽에서 라운드 종료 처리 시점에 미리 true로 설정되기 때문에) 이미 true인 상태로
+    // state 브로드캐스트가 오면 곧바로 최종 결과 모달을 띄워버려서, 마지막 라운드의 결과 화면을
+    // 건너뛰고 게임이 갑자기 끝난 것처럼 보이는 문제가 있었다. 이제는 항상 라운드 결과를 먼저
+    // 보여주고, 마지막 라운드라면 "확인"을 누른 뒤에 최종 결과 모달로 넘어가도록 한다
+    // (아래 showRoundResultModal의 roundAckBtn 핸들러 참고).
+    const last = matchState.history[matchState.history.length-1];
+    if(!last) return;
+    const key = 'round:'+matchState.round+':'+last.winnerIdx;
     if(guestLastResultKey!==key || !isShowing){
       guestLastResultKey = key;
-      if(matchState.matchOver) showFinalResultModal();
-      else { const last=matchState.history[matchState.history.length-1]; showRoundResultModal(last.roundScores, last.counts, last.winnerIdx, last.transfers, last.isLastRound); }
+      showRoundResultModal(last.roundScores, last.counts, last.winnerIdx, last.transfers, last.isLastRound);
     }
   } else {
     guestLastResultKey = null;
@@ -1774,7 +1780,7 @@ function showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastR
     });
   };
   const ackBtn=document.getElementById('roundAckBtn');
-  if(ackBtn) ackBtn.onclick=()=>{ showRoundXpModal(()=>{ closeModal(); }); };
+  if(ackBtn) ackBtn.onclick=()=>{ showRoundXpModal(()=>{ closeModal(); if(isLastRound) showFinalResultModal(); }); };
   document.getElementById('roundLogBtn').onclick=()=>{
     openLogModal(()=>showRoundResultModal(roundScores, counts, winnerIdx, transfers, isLastRound));
   };
