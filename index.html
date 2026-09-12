@@ -1,3 +1,12 @@
+<!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.031 (4인 고정: 나 + AI 3) -->
+<!-- v0.031: AI가 너무 쉽다는 피드백을 반영해 난이도를 올림 — 기존에는 "라운드 전체 승률이
+     15%p 이상 확실히 좋아질 때만" 강한 패(페어/트리플/족보 등)로 갈아탔는데, 이 라운드 승률만
+     보다 보니 정작 "이번 트릭을 실제로 따낼 수 있는가"는 따지지 않고 강패를 내버리는 경우가
+     있었다. 이제 강패로 갈아타려면 (1) 기존의 라운드 승률 조건에 더해 (2) 이번 트릭만 짧게
+     시뮬레이션해서 "아무도 못 받아치고 내가 트릭을 따낼 확률"이 80% 이상으로 충분히 확실할
+     때만 쓰도록 이중으로 검증함(aiRolloutTrick/aiTrickWinProb 추가). 확신이 안 서면 강패를
+     아끼고 기존처럼 가장 싼 패로만 이김. 견제가 급한 danger 상황에서는 이 검증을 건너뛰고
+     그대로 강한 패부터 우선(기존 동작 유지). -->
 <!-- LEXIO (렉시오) - Online + 온라인 멀티 v0.030 (4인 고정: 나 + AI 3) -->
 <!-- v0.030: 온라인 대전에서 게스트가 마지막 라운드의 "N라운드 결과" 화면을 못 보고 곧바로
      게임이 끝나버리는 버그 수정 — host는 라운드가 끝나는 순간 matchState.matchOver를 먼저
@@ -324,7 +333,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand title-font">렉시오<span class="ver-tag">v0.030</span><span>LEXIO</span></div>
+    <div class="brand title-font">렉시오<span class="ver-tag">v0.031</span><span>LEXIO</span></div>
     <div id="roundTag">준비 중</div>
     <div id="onlineTimer" style="display:none;"></div>
     <button id="sfxToggle" title="효과음 켜기/끄기">🔊</button>
@@ -675,19 +684,72 @@ function aiRolloutToEnd(hands, turn, lastCombo, requiredCount, passCount){
   }
   return -1;
 }
+// 나머지 라운드까지 다 굴려보는 aiRolloutToEnd와 달리, "이번 트릭 한 바퀴"가 끝날 때까지만
+// (=누군가 못 받아치고 다시 선이 돌아올 때까지만) 짧게 굴려서 그 트릭을 누가 따냈는지 반환한다.
+// "이 강패를 냈을 때 실제로 이번 트릭을 확실히 이기는가"만 좁게 내다보기 위한 함수.
+function aiRolloutTrick(hands, turn, lastCombo, requiredCount, passCount){
+  const order=TURN_ORDER;
+  for(let steps=0; steps<40; steps++){
+    const dangerNow = hands.some((h,i)=>i!==turn && h.length<=2);
+    let tiles = hands[turn].length ? aiFindPlay(hands[turn], requiredCount, lastCombo, dangerNow) : null;
+    let played=false;
+    if(tiles){
+      const ev=evaluatePlay(tiles, requiredCount);
+      if(ev.ok && beatsCombo(ev.combo, lastCombo)){
+        const ids=tiles.map(tileId);
+        hands[turn]=hands[turn].filter(t=>!ids.includes(tileId(t)));
+        lastCombo={...ev.combo, tiles, owner:turn};
+        requiredCount=ev.combo.count;
+        passCount=0;
+        played=true;
+        if(hands[turn].length===0) return lastCombo.owner; // 손을 털었어도 트릭 자체는 이긴 것
+      }
+    }
+    if(!played){
+      passCount++;
+      if(passCount>=N_PLAYERS-1) return lastCombo.owner; // 트릭 종료: 마지막으로 낸 사람이 승자
+    }
+    turn=order[(order.indexOf(turn)+1)%order.length];
+  }
+  return lastCombo.owner;
+}
+// tiles를 냈을 때 "이번 트릭을 실제로 따낼(=아무도 못 받아쳐서 다시 내가 선이 될) 확률"을
+// 몬테카를로로 추정한다. 라운드 전체 승패가 아니라 눈앞의 트릭 하나만 보는 짧은 시야의 예측.
+function aiTrickWinProb(selfIdx, tiles, requiredCount, prevCombo, rollouts){
+  const ev=evaluatePlay(tiles, requiredCount);
+  if(!ev.ok) return 0;
+  let wins=0;
+  for(let r=0;r<rollouts;r++){
+    const hands=G.players.map(p=>p.hand.slice());
+    const ids=tiles.map(tileId);
+    hands[selfIdx]=hands[selfIdx].filter(t=>!ids.includes(tileId(t)));
+    const lastCombo={...ev.combo, tiles, owner:selfIdx};
+    const turn=TURN_ORDER[(TURN_ORDER.indexOf(selfIdx)+1)%TURN_ORDER.length];
+    const winner=aiRolloutTrick(hands, turn, lastCombo, ev.combo.count, 0);
+    if(winner===selfIdx) wins++;
+  }
+  return wins/rollouts;
+}
 // 후보 수들 중 몬테카를로 승률이 가장 높은 것을 고른다 (동률 시 먼저 나온 후보 우선).
 // candidateTilesList는 이미 "아끼는(약한) 패가 먼저" 오도록 정렬되어 있다는 전제 하에,
 // conserveMargin을 주면 뒤쪽의 더 강한/아까운 패가 "확실히"(margin 이상) 더 유리할 때만
 // 갈아타도록 해서, 아슬아슬한 상황이 아니면 강패를 함부로 쓰지 않고 아끼게 한다.
-function aiPickByMonteCarlo(selfIdx, candidateTilesList, requiredCount, prevCombo, rollouts, conserveMargin){
+// trickCertaintyMin을 주면, 라운드 승률 조건을 만족하더라도 "이번 트릭을 확실히(그 확률
+// 이상으로) 따낼 수 있을 때"만 실제로 갈아타도록 이중 검증한다 — 강패를 냈는데 바로
+// 다른 사람이 받아쳐버려서 헛되이 날리는 상황을 막기 위함.
+function aiPickByMonteCarlo(selfIdx, candidateTilesList, requiredCount, prevCombo, rollouts, conserveMargin, trickCertaintyMin){
   conserveMargin = conserveMargin||0;
+  trickCertaintyMin = trickCertaintyMin||0;
   let best=candidateTilesList[0], bestScore=-1;
   candidateTilesList.forEach((tiles,i)=>{
     let wins=0;
     for(let r=0;r<rollouts;r++){ if(simulateAfterMove(selfIdx, tiles, requiredCount, prevCombo)) wins++; }
     const score=wins/rollouts;
     if(i===0){ bestScore=score; best=tiles; return; }
-    if(score>bestScore+conserveMargin){ bestScore=score; best=tiles; }
+    if(score>bestScore+conserveMargin){
+      const certainty = trickCertaintyMin>0 ? aiTrickWinProb(selfIdx, tiles, requiredCount, prevCombo, 10) : 1;
+      if(certainty>=trickCertaintyMin){ bestScore=score; best=tiles; }
+    }
   });
   return best;
 }
@@ -786,7 +848,7 @@ function aiFindPlay(hand, requiredCount, prevCombo, dangerNow){
     //  오도록 정렬돼 있으므로, 뒤쪽의 더 아까운 패가 확실히(15%p 이상) 더 유리할 때만 쓴다.)
     const selfIdx=aiSelfIdxOf(hand);
     if(selfIdx>=0 && validCandidates.length>1){
-      return aiPickByMonteCarlo(selfIdx, validCandidates, null, prevCombo, 10, 0.15);
+      return aiPickByMonteCarlo(selfIdx, validCandidates, null, prevCombo, 10, 0.15, 0.8);
     }
     // G 컨텍스트 없이 불릴 때(시뮬레이션 내부 등)는 가벼운 확률적 휴리스틱으로 대체
     const tripleCand=candidates.find((c,i)=>tripleNums.length && i===singleNums.slice(0,3).length+pairNums.slice(0,2).length);
@@ -834,7 +896,7 @@ function aiFindPlay(hand, requiredCount, prevCombo, dangerNow){
   const selfIdx=aiSelfIdxOf(hand);
   if(selfIdx>=0 && candidates.length>1){
     const shortlist=candidates.slice(0,4).map(x=>x.tiles);
-    return aiPickByMonteCarlo(selfIdx, shortlist, requiredCount, prevCombo, 8, dangerNow?0:0.15);
+    return aiPickByMonteCarlo(selfIdx, shortlist, requiredCount, prevCombo, 8, dangerNow?0:0.15, dangerNow?0:0.8);
   }
   return candidates[0].tiles;
 }
